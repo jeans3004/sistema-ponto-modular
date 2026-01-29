@@ -1,0 +1,33 @@
+{
+  "indexes": [
+    {
+      "collectionGroup": "pontos",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "funcionarioEmail",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "data",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "ausencias",
+      "queryScope": "COLLECTION", 
+      "fields": [
+        {
+          "fieldPath": "funcionarioEmail",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "data",
+          "order": "DESCENDING"
+        }
+      ]
+    }
+  ],
+  "fieldOverrides": []
+}
