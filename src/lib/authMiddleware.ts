@@ -1,5 +1,6 @@
 import { NextRequest } from 'next/server'
 import { getServerSession } from 'next-auth'
+import { authOptions } from '@/lib/auth'
 import { obterUsuario, verificarPermissao } from './firebaseUsers'
 import { Usuario, NivelHierarquico, PERMISSOES_SISTEMA } from '@/types/usuario'
 
@@ -14,9 +15,30 @@ export interface AuthResult {
 // Middleware principal de autenticação
 export async function verificarAutenticacao(req?: NextRequest): Promise<AuthResult> {
   try {
-    const session = await getServerSession()
+    console.log("🔐 Verificando autenticação...")
+    
+    // Tentar obter a sessão usando tanto getServerSession quanto headers
+    let session = await getServerSession(authOptions)
+    
+    // Se não conseguir a sessão, tentar obter das headers da requisição
+    if (!session && req) {
+      const authorization = req.headers.get('authorization')
+      const cookie = req.headers.get('cookie')
+      console.log("🍪 Headers da requisição:", { 
+        hasAuthorization: !!authorization,
+        hasCookie: !!cookie,
+        cookiePreview: cookie?.substring(0, 100)
+      })
+    }
+    
+    console.log("📋 Sessão obtida:", { 
+      hasSession: !!session, 
+      userEmail: session?.user?.email,
+      expires: session?.expires 
+    })
     
     if (!session?.user?.email) {
+      console.log("❌ Usuário não autenticado - sem sessão ou email")
       return {
         success: false,
         error: 'Usuário não autenticado',

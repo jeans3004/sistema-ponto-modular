@@ -27,6 +27,11 @@ export async function GET(req: NextRequest) {
         configuracoes: usuario.configuracoes,
         dataCadastro: usuario.dataCadastro,
         ultimoAcesso: usuario.ultimoAcesso,
+        // Campos de coordenação
+        coordenacoes: usuario.coordenacoes,
+        coordenacaoId: usuario.coordenacaoId,
+        coordenacaoNome: usuario.coordenacaoNome,
+        tipoColaborador: usuario.tipoColaborador,
       }
     })
   } catch (error) {

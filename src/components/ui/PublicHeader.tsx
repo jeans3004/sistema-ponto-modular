@@ -1,14 +1,21 @@
 'use client'
 
+'use client'
+
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
+import { signIn } from 'next-auth/react'
 import { FaClock, FaHome, FaSignInAlt } from 'react-icons/fa'
 
 export default function PublicHeader() {
-  const [currentTime, setCurrentTime] = useState(new Date())
+  const [currentTime, setCurrentTime] = useState<Date | null>(null)
 
-  // Atualizar relógio
+  // Atualizar relógio - só no cliente para evitar hidratação
   useEffect(() => {
+    // Definir hora inicial no cliente
+    setCurrentTime(new Date())
+    
+    // Atualizar a cada segundo
     const timer = setInterval(() => {
       setCurrentTime(new Date())
     }, 1000)
@@ -48,7 +55,7 @@ export default function PublicHeader() {
                   <span className="block text-blue-600">de Pontos</span>
                 </h1>
                 <p className="text-sm text-gray-600">
-                  Centro de Educação Integral Christ Master
+                  Desenvolvido por Jean Machado
                 </p>
               </div>
             </div>
@@ -59,10 +66,10 @@ export default function PublicHeader() {
             {/* Relógio */}
             <div className="hidden md:block text-right bg-gray-50 rounded-xl px-4 py-2">
               <div className="text-lg font-bold text-gray-900">
-                {formatTime(currentTime)}
+                {currentTime ? formatTime(currentTime) : '--:--:--'}
               </div>
               <div className="text-gray-600 text-sm">
-                {formatDate(currentTime)}
+                {currentTime ? formatDate(currentTime) : '--'}
               </div>
             </div>
 
@@ -75,13 +82,13 @@ export default function PublicHeader() {
                 <FaHome className="mr-2" />
                 <span className="hidden sm:block">Início</span>
               </Link>
-              <Link
-                href="/login"
+              <button
+                onClick={() => signIn('google', { callbackUrl: '/dashboard' })}
                 className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-all duration-200"
               >
                 <FaSignInAlt className="mr-2" />
                 <span>Entrar</span>
-              </Link>
+              </button>
             </div>
           </div>
         </div>

@@ -1,6 +1,7 @@
 // Tipos para o sistema de usuários e hierarquia
 
 export type NivelHierarquico = 'administrador' | 'coordenador' | 'colaborador'
+export type TipoColaborador = 'docente' | 'administrativo'
 
 export interface Usuario {
   id: string
@@ -14,6 +15,18 @@ export interface Usuario {
   dataAprovacao?: Date
   dataCadastro: Date
   ultimoAcesso?: Date
+  
+  // Novos campos para sistema de coordenações - suporte a múltiplas coordenações
+  coordenacoes?: {
+    id: string
+    nome: string
+  }[] // Array de coordenações a que pertence
+  tipoColaborador?: TipoColaborador // Tipo do colaborador (docente/administrativo)
+  
+  // Campos legados (manter compatibilidade)
+  coordenacaoId?: string // DEPRECATED: usar coordenacoes[]
+  coordenacaoNome?: string // DEPRECATED: usar coordenacoes[]
+  
   // Configurações específicas para colaborador
   configuracoes?: {
     horarioTrabalho?: {
@@ -21,10 +34,25 @@ export interface Usuario {
       saida: string // HH:MM
       inicioAlmoco: string // HH:MM
       fimAlmoco: string // HH:MM
+      [dia: string]: any // suporte a horários por dia da semana
     }
+    tipoHorario?: 'geral' | 'dias'
     definidoPor?: string // Email do coordenador que definiu
-    dataDefinicao?: Date
+    dataDefinicao?: any
   }
+}
+
+// Interface para coordenações
+export interface Coordenacao {
+  id: string
+  nome: string
+  descricao: string
+  coordenadorEmail?: string
+  coordenadorNome?: string
+  ativo: boolean
+  createdAt: Date
+  updatedAt: Date
+  createdBy: string
 }
 
 export interface PermissaoNivel {

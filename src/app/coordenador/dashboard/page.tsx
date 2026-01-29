@@ -25,20 +25,27 @@ import {
   FaTimes,
   FaInfoCircle,
   FaUserCheck,
-  FaClipboardList
+  FaClipboardList,
+  FaBuilding
 } from 'react-icons/fa'
 
 interface Funcionario {
   email: string
   nome: string
   foto?: string
+  coordenacoes?: { id: string; nome: string }[]
+  coordenacaoId?: string
+  coordenacaoNome?: string
+  tipoColaborador?: 'docente' | 'administrativo'
   configuracoes?: {
     horarioTrabalho?: {
       entrada: string
       saida: string
       inicioAlmoco: string
       fimAlmoco: string
+      [dia: string]: any
     }
+    tipoHorario?: 'geral' | 'dias'
     definidoPor?: string
     dataDefinicao?: any
   }
@@ -65,6 +72,7 @@ export default function CoordenadorDashboard() {
   // Estados principais
   const [funcionarios, setFuncionarios] = useState<Funcionario[]>([])
   const [pontosHoje, setPontosHoje] = useState<TimeRecord[]>([])
+  const [coordenacoes, setCoordenacoes] = useState<any[]>([])
   const [isLoadingData, setIsLoadingData] = useState(true)
   const [currentTime, setCurrentTime] = useState(new Date())
   
@@ -72,11 +80,16 @@ export default function CoordenadorDashboard() {
   const [selectedEmployee, setSelectedEmployee] = useState<Funcionario | null>(null)
   const [showScheduleModal, setShowScheduleModal] = useState(false)
   const [scheduleForm, setScheduleForm] = useState({
-    entrada: '08:00',
-    saida: '17:00',
-    inicioAlmoco: '12:00',
-    fimAlmoco: '13:00'
+    geral: {
+      entrada: '08:00',
+      saida: '17:00',
+      inicioAlmoco: '12:00',
+      fimAlmoco: '13:00'
+    },
+    diasEspecificos: {} as Record<string, { entrada: string; saida: string; inicioAlmoco: string; fimAlmoco: string }>
   })
+  const [scheduleType, setScheduleType] = useState<'geral' | 'dias'>('geral')
+  const [selectedDaysToAdd, setSelectedDaysToAdd] = useState<string[]>([])
   const [isSubmittingSchedule, setIsSubmittingSchedule] = useState(false)
   
   // Estados para filtros e busca
@@ -122,6 +135,7 @@ export default function CoordenadorDashboard() {
       
       if (funcionariosData.success) {
         setFuncionarios(funcionariosData.funcionarios)
+        setCoordenacoes(funcionariosData.coordenacoes || [])
       }
       
       // Carregar pontos de hoje de todos os funcionários
@@ -144,16 +158,49 @@ export default function CoordenadorDashboard() {
     
     // Pré-carregar horários existentes se houver
     if (funcionario.configuracoes?.horarioTrabalho) {
-      setScheduleForm(funcionario.configuracoes.horarioTrabalho)
+      const horarios = funcionario.configuracoes.horarioTrabalho
+      const tipo = funcionario.configuracoes.tipoHorario || 'geral'
+      
+      if (tipo === 'geral') {
+        setScheduleForm({
+          geral: horarios,
+          diasEspecificos: {}
+        })
+        setScheduleType('geral')
+      } else if (tipo === 'dias') {
+        // Migrar formato antigo para novo
+        setScheduleForm({
+          geral: horarios.geral || {
+            entrada: '08:00',
+            saida: '17:00',
+            inicioAlmoco: '12:00',
+            fimAlmoco: '13:00'
+          },
+          diasEspecificos: horarios.diasEspecificos || {}
+        })
+        setScheduleType('dias')
+      } else if (tipo === 'flexivel') {
+        setScheduleForm({
+          geral: horarios.geral,
+          diasEspecificos: horarios.diasEspecificos || {}
+        })
+        setScheduleType('dias')
+      }
     } else {
+      // Resetar para valores padrão
       setScheduleForm({
-        entrada: '08:00',
-        saida: '17:00',
-        inicioAlmoco: '12:00',
-        fimAlmoco: '13:00'
+        geral: {
+          entrada: '08:00',
+          saida: '17:00',
+          inicioAlmoco: '12:00',
+          fimAlmoco: '13:00'
+        },
+        diasEspecificos: {}
       })
+      setScheduleType('geral')
     }
     
+    setSelectedDaysToAdd([])
     setShowScheduleModal(true)
   }
 
@@ -162,6 +209,14 @@ export default function CoordenadorDashboard() {
     
     setIsSubmittingSchedule(true)
     try {
+      // Para o novo sistema flexível, sempre enviamos tanto o geral quanto os dias específicos
+      const horarios = scheduleType === 'geral' 
+        ? scheduleForm.geral 
+        : {
+            geral: scheduleForm.geral,
+            diasEspecificos: scheduleForm.diasEspecificos
+          }
+      
       const response = await fetch('/api/coordenador/horarios', {
         method: 'POST',
         headers: {
@@ -169,7 +224,8 @@ export default function CoordenadorDashboard() {
         },
         body: JSON.stringify({
           emailFuncionario: selectedEmployee.email,
-          horarios: scheduleForm
+          horarios: horarios,
+          tipoHorario: scheduleType
         })
       })
       
@@ -286,6 +342,23 @@ export default function CoordenadorDashboard() {
                 <p className="text-blue-200 text-lg">
                   Dashboard do Coordenador • {formatDate(new Date())}
                 </p>
+                {/* Mostrar coordenações */}
+                {usuario?.coordenacoes && usuario.coordenacoes.length > 0 && (
+                  <div className="flex items-center mt-2 flex-wrap gap-2">
+                    <FaBuilding className="text-blue-300 mr-2" />
+                    {usuario.coordenacoes.map((coord) => (
+                      <span key={coord.id} className="text-blue-200 font-medium bg-blue-800/30 px-2 py-1 rounded-md text-sm">
+                        {coord.nome}
+                      </span>
+                    ))}
+                  </div>
+                )} 
+                {usuario?.coordenacaoNome && !usuario.coordenacoes?.length && (
+                  <div className="flex items-center mt-2">
+                    <FaBuilding className="text-blue-300 mr-2" />
+                    <span className="text-blue-200 font-medium bg-blue-800/30 px-2 py-1 rounded-md text-sm">{usuario.coordenacaoNome}</span>
+                  </div>
+                )}
               </div>
               <div className="text-center">
                 <div className="text-4xl font-bold text-white mb-2">
@@ -362,7 +435,7 @@ export default function CoordenadorDashboard() {
                   placeholder="Buscar funcionário..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-900"
                 />
               </div>
             </div>
@@ -520,6 +593,7 @@ export default function CoordenadorDashboard() {
                           <button
                             onClick={() => router.push(`/historico?funcionario=${funcionario.email}`)}
                             className="inline-flex items-center px-3 py-1 border border-gray-300 text-gray-700 rounded-md hover:bg-gray-50 transition-colors"
+                            title={`Ver histórico de ${funcionario.nome}`}
                           >
                             <FaHistory className="mr-1" />
                             Histórico
@@ -538,8 +612,21 @@ export default function CoordenadorDashboard() {
               <FaUsers className="mx-auto h-12 w-12 text-gray-400" />
               <h3 className="mt-2 text-sm font-medium text-gray-900">Nenhum funcionário encontrado</h3>
               <p className="mt-1 text-sm text-gray-500">
-                {searchTerm ? 'Tente uma busca diferente.' : 'Nenhum funcionário corresponde aos filtros selecionados.'}
+                {searchTerm ? 'Tente uma busca diferente.' : 
+                 !usuario?.coordenacaoId && !usuario?.coordenacoes?.length ?
+                 'Você não possui coordenação atribuída.' :
+                 'Nenhum funcionário corresponde aos filtros selecionados.'}
               </p>
+              {!usuario?.coordenacaoId && !usuario?.coordenacoes?.length && (
+                <div className="mt-4 mx-auto max-w-md p-4 bg-yellow-50 rounded-lg border border-yellow-200">
+                  <div className="flex items-center">
+                    <FaInfoCircle className="text-yellow-600 mr-2 flex-shrink-0" />
+                    <span className="text-yellow-800 text-sm">
+                      Entre em contato com o administrador para ter uma coordenação atribuída
+                    </span>
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -549,6 +636,18 @@ export default function CoordenadorDashboard() {
           <div className="bg-white/95 backdrop-blur-sm rounded-2xl shadow-2xl p-6 border border-white/20">
             <h3 className="text-xl font-bold text-gray-900 mb-4">Ações Rápidas</h3>
             <div className="space-y-3">
+              <button
+                onClick={() => router.push('/coordenador/funcionarios')}
+                className="w-full flex items-center p-3 bg-gradient-to-r from-indigo-50 to-indigo-100 rounded-xl hover:from-indigo-100 hover:to-indigo-200 transition-all duration-200 border border-indigo-200"
+              >
+                <FaUsers className="text-indigo-600 mr-3 text-lg" />
+                <div className="flex-1 text-left">
+                  <p className="font-semibold text-indigo-900">Funcionários</p>
+                  <p className="text-sm text-indigo-700">Visualizar equipe da coordenação</p>
+                </div>
+                <FaArrowRight className="text-indigo-600" />
+              </button>
+
               <button
                 onClick={() => router.push('/relatorios')}
                 className="w-full flex items-center p-3 bg-gradient-to-r from-blue-50 to-blue-100 rounded-xl hover:from-blue-100 hover:to-blue-200 transition-all duration-200 border border-blue-200"
@@ -562,7 +661,7 @@ export default function CoordenadorDashboard() {
               </button>
               
               <button
-                onClick={() => router.push('/historico')}
+                onClick={() => router.push('/historico-geral')}
                 className="w-full flex items-center p-3 bg-gradient-to-r from-green-50 to-green-100 rounded-xl hover:from-green-100 hover:to-green-200 transition-all duration-200 border border-green-200"
               >
                 <FaClipboardList className="text-green-600 mr-3 text-lg" />
@@ -600,25 +699,36 @@ export default function CoordenadorDashboard() {
           </div>
 
           <div className="bg-white/95 backdrop-blur-sm rounded-2xl shadow-2xl p-6 border border-white/20">
-            <h3 className="text-xl font-bold text-gray-900 mb-4">Status do Sistema</h3>
-            <div className="space-y-3">
-              <div className="flex items-center">
-                <FaCheckCircle className="text-green-500 mr-3" />
-                <span className="text-sm text-gray-700">Firebase conectado</span>
+            <h3 className="text-xl font-bold text-gray-900 mb-4 flex items-center">
+              <FaBuilding className="text-purple-600 mr-3" />
+              Minhas Coordenações
+            </h3>
+            {coordenacoes.length > 0 ? (
+              <div className="space-y-3">
+                {coordenacoes.map((coordenacao) => (
+                  <div key={coordenacao.id} className="bg-gradient-to-r from-purple-50 to-purple-100 p-4 rounded-lg border border-purple-200">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <h4 className="font-semibold text-purple-900">{coordenacao.nome}</h4>
+                        <p className="text-sm text-purple-700 mt-1">{coordenacao.descricao}</p>
+                      </div>
+                      <div className="flex items-center">
+                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                          <FaCheckCircle className="mr-1" />
+                          Ativa
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                ))}
               </div>
-              <div className="flex items-center">
-                <FaCheckCircle className="text-green-500 mr-3" />
-                <span className="text-sm text-gray-700">Sincronização ativa</span>
+            ) : (
+              <div className="text-center py-8 text-gray-500">
+                <FaBuilding className="mx-auto h-12 w-12 text-gray-300 mb-4" />
+                <p className="text-lg font-medium mb-2">Nenhuma coordenação atribuída</p>
+                <p className="text-sm">Entre em contato com o administrador para ser atribuído a uma coordenação.</p>
               </div>
-              <div className="flex items-center">
-                <FaCheckCircle className="text-green-500 mr-3" />
-                <span className="text-sm text-gray-700">Permissões validadas</span>
-              </div>
-              <div className="flex items-center">
-                <FaCheckCircle className="text-green-500 mr-3" />
-                <span className="text-sm text-gray-700">Sistema operacional</span>
-              </div>
-            </div>
+            )}
           </div>
         </div>
       </main>
@@ -626,7 +736,7 @@ export default function CoordenadorDashboard() {
       {/* Modal de Definição de Horários */}
       {showScheduleModal && selectedEmployee && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl p-8 max-w-md w-full mx-4 shadow-2xl">
+          <div className="bg-white rounded-2xl p-8 max-w-4xl w-full mx-4 shadow-2xl max-h-[90vh] overflow-y-auto">
             <div className="text-center mb-6">
               <div className="w-16 h-16 bg-blue-600 rounded-full flex items-center justify-center mx-auto mb-4">
                 <FaClock className="text-white text-2xl" />
@@ -639,7 +749,36 @@ export default function CoordenadorDashboard() {
               </p>
             </div>
 
-            <div className="space-y-4">
+            {/* Selector de tipo de horário */}
+            <div className="mb-6">
+              <div className="flex bg-gray-100 rounded-lg p-1">
+                <button
+                  onClick={() => setScheduleType('geral')}
+                  className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition-colors ${
+                    scheduleType === 'geral'
+                      ? 'bg-blue-600 text-white'
+                      : 'text-gray-700 hover:bg-gray-200'
+                  }`}
+                >
+                  Horário Geral
+                </button>
+                <button
+                  onClick={() => setScheduleType('dias')}
+                  className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition-colors ${
+                    scheduleType === 'dias'
+                      ? 'bg-blue-600 text-white'
+                      : 'text-gray-700 hover:bg-gray-200'
+                  }`}
+                >
+                  Por Dia da Semana
+                </button>
+              </div>
+            </div>
+
+            {scheduleType === 'geral' ? (
+              /* Horário Geral */
+              <div className="space-y-4">
+                <h3 className="text-lg font-semibold text-gray-900 mb-4">Horário para todos os dias</h3>
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -647,9 +786,12 @@ export default function CoordenadorDashboard() {
                   </label>
                   <input
                     type="time"
-                    value={scheduleForm.entrada}
-                    onChange={(e) => setScheduleForm({ ...scheduleForm, entrada: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    value={scheduleForm.geral.entrada}
+                    onChange={(e) => setScheduleForm({ 
+                      ...scheduleForm, 
+                      geral: { ...scheduleForm.geral, entrada: e.target.value }
+                    })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-900 bg-white"
                   />
                 </div>
                 <div>
@@ -658,9 +800,12 @@ export default function CoordenadorDashboard() {
                   </label>
                   <input
                     type="time"
-                    value={scheduleForm.saida}
-                    onChange={(e) => setScheduleForm({ ...scheduleForm, saida: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    value={scheduleForm.geral.saida}
+                    onChange={(e) => setScheduleForm({ 
+                      ...scheduleForm, 
+                      geral: { ...scheduleForm.geral, saida: e.target.value }
+                    })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-900 bg-white"
                   />
                 </div>
               </div>
@@ -672,9 +817,12 @@ export default function CoordenadorDashboard() {
                   </label>
                   <input
                     type="time"
-                    value={scheduleForm.inicioAlmoco}
-                    onChange={(e) => setScheduleForm({ ...scheduleForm, inicioAlmoco: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    value={scheduleForm.geral.inicioAlmoco}
+                    onChange={(e) => setScheduleForm({ 
+                      ...scheduleForm, 
+                      geral: { ...scheduleForm.geral, inicioAlmoco: e.target.value }
+                    })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-900 bg-white"
                   />
                 </div>
                 <div>
@@ -683,13 +831,233 @@ export default function CoordenadorDashboard() {
                   </label>
                   <input
                     type="time"
-                    value={scheduleForm.fimAlmoco}
-                    onChange={(e) => setScheduleForm({ ...scheduleForm, fimAlmoco: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    value={scheduleForm.geral.fimAlmoco}
+                    onChange={(e) => setScheduleForm({ 
+                      ...scheduleForm, 
+                      geral: { ...scheduleForm.geral, fimAlmoco: e.target.value }
+                    })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-900 bg-white"
                   />
                 </div>
               </div>
             </div>
+            ) : (
+              /* Horários flexíveis por dia da semana */
+              <div className="space-y-6">
+                {/* Horário Geral como base */}
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                  <h3 className="text-lg font-semibold text-blue-900 mb-3">Horário Geral (Base)</h3>
+                  <p className="text-sm text-blue-700 mb-4">Este será usado como padrão para os dias que não tiverem horário específico definido.</p>
+                  <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+                    <div>
+                      <label className="block text-xs font-medium text-blue-800 mb-1">Entrada</label>
+                      <input
+                        type="time"
+                        value={scheduleForm.geral.entrada}
+                        onChange={(e) => setScheduleForm({ 
+                          ...scheduleForm, 
+                          geral: { ...scheduleForm.geral, entrada: e.target.value }
+                        })}
+                        className="w-full px-2 py-1 border border-blue-300 rounded text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-900 bg-white"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-blue-800 mb-1">Saída</label>
+                      <input
+                        type="time"
+                        value={scheduleForm.geral.saida}
+                        onChange={(e) => setScheduleForm({ 
+                          ...scheduleForm, 
+                          geral: { ...scheduleForm.geral, saida: e.target.value }
+                        })}
+                        className="w-full px-2 py-1 border border-blue-300 rounded text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-900 bg-white"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-blue-800 mb-1">Início Almoço</label>
+                      <input
+                        type="time"
+                        value={scheduleForm.geral.inicioAlmoco}
+                        onChange={(e) => setScheduleForm({ 
+                          ...scheduleForm, 
+                          geral: { ...scheduleForm.geral, inicioAlmoco: e.target.value }
+                        })}
+                        className="w-full px-2 py-1 border border-blue-300 rounded text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-900 bg-white"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-blue-800 mb-1">Fim Almoço</label>
+                      <input
+                        type="time"
+                        value={scheduleForm.geral.fimAlmoco}
+                        onChange={(e) => setScheduleForm({ 
+                          ...scheduleForm, 
+                          geral: { ...scheduleForm.geral, fimAlmoco: e.target.value }
+                        })}
+                        className="w-full px-2 py-1 border border-blue-300 rounded text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-900 bg-white"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Seletor para adicionar dias específicos */}
+                <div className="border border-gray-200 rounded-lg p-4">
+                  <h3 className="text-lg font-semibold text-gray-900 mb-3">Dias com Horários Específicos</h3>
+                  <p className="text-sm text-gray-600 mb-4">Adicione apenas os dias que precisam de horários diferentes do padrão geral.</p>
+                  
+                  <div className="flex flex-wrap gap-2 mb-4">
+                    {['segunda', 'terca', 'quarta', 'quinta', 'sexta', 'sabado', 'domingo'].map(dia => {
+                      const isSelected = scheduleForm.diasEspecificos[dia] !== undefined
+                      const dayLabel = {
+                        segunda: 'Segunda-feira',
+                        terca: 'Terça-feira', 
+                        quarta: 'Quarta-feira',
+                        quinta: 'Quinta-feira',
+                        sexta: 'Sexta-feira',
+                        sabado: 'Sábado',
+                        domingo: 'Domingo'
+                      }[dia]
+                      
+                      return (
+                        <button
+                          key={dia}
+                          onClick={() => {
+                            if (isSelected) {
+                              // Remover dia específico
+                              const newDiasEspecificos = { ...scheduleForm.diasEspecificos }
+                              delete newDiasEspecificos[dia]
+                              setScheduleForm({ 
+                                ...scheduleForm, 
+                                diasEspecificos: newDiasEspecificos
+                              })
+                            } else {
+                              // Adicionar dia específico com valores do horário geral
+                              setScheduleForm({ 
+                                ...scheduleForm, 
+                                diasEspecificos: {
+                                  ...scheduleForm.diasEspecificos,
+                                  [dia]: { ...scheduleForm.geral }
+                                }
+                              })
+                            }
+                          }}
+                          className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                            isSelected
+                              ? 'bg-green-600 text-white hover:bg-green-700'
+                              : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                          }`}
+                        >
+                          {isSelected ? '✓ ' : '+ '}{dayLabel}
+                        </button>
+                      )
+                    })}
+                  </div>
+                </div>
+
+                {/* Formulários para dias específicos */}
+                {Object.entries(scheduleForm.diasEspecificos).map(([dia, horario]) => {
+                  const dayLabel = {
+                    segunda: 'Segunda-feira',
+                    terca: 'Terça-feira', 
+                    quarta: 'Quarta-feira',
+                    quinta: 'Quinta-feira',
+                    sexta: 'Sexta-feira',
+                    sabado: 'Sábado',
+                    domingo: 'Domingo'
+                  }[dia]
+                  
+                  return (
+                    <div key={dia} className="border border-orange-200 bg-orange-50 rounded-lg p-4">
+                      <div className="flex justify-between items-center mb-3">
+                        <h4 className="font-medium text-orange-900">{dayLabel}</h4>
+                        <button
+                          onClick={() => {
+                            const newDiasEspecificos = { ...scheduleForm.diasEspecificos }
+                            delete newDiasEspecificos[dia]
+                            setScheduleForm({ 
+                              ...scheduleForm, 
+                              diasEspecificos: newDiasEspecificos
+                            })
+                          }}
+                          className="text-red-600 hover:text-red-800 text-sm font-medium"
+                        >
+                          ✕ Remover
+                        </button>
+                      </div>
+                      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+                        <div>
+                          <label className="block text-xs font-medium text-orange-800 mb-1">Entrada</label>
+                          <input
+                            type="time"
+                            value={horario.entrada}
+                            onChange={(e) => setScheduleForm({ 
+                              ...scheduleForm, 
+                              diasEspecificos: { 
+                                ...scheduleForm.diasEspecificos, 
+                                [dia]: { ...horario, entrada: e.target.value }
+                              }
+                            })}
+                            className="w-full px-2 py-1 border border-orange-300 rounded text-sm focus:ring-2 focus:ring-orange-500 focus:border-transparent text-gray-900 bg-white"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-medium text-orange-800 mb-1">Saída</label>
+                          <input
+                            type="time"
+                            value={horario.saida}
+                            onChange={(e) => setScheduleForm({ 
+                              ...scheduleForm, 
+                              diasEspecificos: { 
+                                ...scheduleForm.diasEspecificos, 
+                                [dia]: { ...horario, saida: e.target.value }
+                              }
+                            })}
+                            className="w-full px-2 py-1 border border-orange-300 rounded text-sm focus:ring-2 focus:ring-orange-500 focus:border-transparent text-gray-900 bg-white"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-medium text-orange-800 mb-1">Início Almoço</label>
+                          <input
+                            type="time"
+                            value={horario.inicioAlmoco}
+                            onChange={(e) => setScheduleForm({ 
+                              ...scheduleForm, 
+                              diasEspecificos: { 
+                                ...scheduleForm.diasEspecificos, 
+                                [dia]: { ...horario, inicioAlmoco: e.target.value }
+                              }
+                            })}
+                            className="w-full px-2 py-1 border border-orange-300 rounded text-sm focus:ring-2 focus:ring-orange-500 focus:border-transparent text-gray-900 bg-white"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-medium text-orange-800 mb-1">Fim Almoço</label>
+                          <input
+                            type="time"
+                            value={horario.fimAlmoco}
+                            onChange={(e) => setScheduleForm({ 
+                              ...scheduleForm, 
+                              diasEspecificos: { 
+                                ...scheduleForm.diasEspecificos, 
+                                [dia]: { ...horario, fimAlmoco: e.target.value }
+                              }
+                            })}
+                            className="w-full px-2 py-1 border border-orange-300 rounded text-sm focus:ring-2 focus:ring-orange-500 focus:border-transparent text-gray-900 bg-white"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  )
+                })}
+
+                {Object.keys(scheduleForm.diasEspecificos).length === 0 && (
+                  <div className="text-center py-8 text-gray-500">
+                    <p>Nenhum dia específico adicionado.</p>
+                    <p className="text-sm">O horário geral será usado para todos os dias da semana.</p>
+                  </div>
+                )}
+              </div>
+            )}
 
             <div className="flex space-x-3 mt-8">
               <button

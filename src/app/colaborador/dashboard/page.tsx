@@ -29,7 +29,9 @@ import {
   FaUtensils,
   FaPause,
   FaFileAlt,
-  FaExclamationTriangle
+  FaExclamationTriangle,
+  FaGraduationCap,
+  FaBuilding
 } from 'react-icons/fa'
 
 interface TimeRecord {
@@ -40,6 +42,8 @@ interface TimeRecord {
   horaSaida?: string
   inicioAlmoco?: string
   fimAlmoco?: string
+  inicioHtp?: string
+  fimHtp?: string
   tempoAlmoco?: string
   totalHoras: string
 }
@@ -61,6 +65,14 @@ export default function ColaboradorDashboard() {
   const [canStartLunch, setCanStartLunch] = useState(false)
   const [canEndLunch, setCanEndLunch] = useState(false)
   
+  // Estados para HTP
+  const [canStartHTP, setCanStartHTP] = useState(false)
+  const [canEndHTP, setCanEndHTP] = useState(false)
+  const [isOnHTP, setIsOnHTP] = useState(false)
+  
+  // Estado para submissão de pontos
+  const [isSubmittingPonto, setIsSubmittingPonto] = useState(false)
+  
   // Novos estados para os modais - organizados junto com os outros estados
   const [showReportsModal, setShowReportsModal] = useState(false)
   const [showConfigModal, setShowConfigModal] = useState(false)
@@ -73,7 +85,7 @@ export default function ColaboradorDashboard() {
   // Estados para modal de sucesso
   const [showSuccessModal, setShowSuccessModal] = useState(false)
   const [successModalData, setSuccessModalData] = useState<{
-    type: 'entrada' | 'saida' | 'inicio-almoco' | 'fim-almoco'
+    type: 'entrada' | 'saida' | 'inicio-almoco' | 'fim-almoco' | 'inicio-htp' | 'fim-htp'
     time: string
     distance?: number
     message?: string
@@ -151,6 +163,14 @@ export default function ColaboradorDashboard() {
           setCanEndLunch(hasLunchStart && !hasLunchEnd && !hasExit)
           setIsOnLunch(hasLunchStart && !hasLunchEnd)
           
+          // Lógica do HTP - só pode usar após ter entrada registrada
+          const hasHTPStart = !!registroHoje.inicioHtp
+          const hasHTPEnd = !!registroHoje.fimHtp
+          
+          setCanStartHTP(hasEntry && !hasHTPStart && !hasExit)
+          setCanEndHTP(hasHTPStart && !hasHTPEnd && !hasExit)
+          setIsOnHTP(hasHTPStart && !hasHTPEnd)
+          
           if (registroHoje.horaEntrada) {
             const [hora, minuto] = registroHoje.horaEntrada.split(':')
             const entryDate = new Date()
@@ -162,6 +182,9 @@ export default function ColaboradorDashboard() {
           setCanStartLunch(false)
           setCanEndLunch(false)
           setIsOnLunch(false)
+          setCanStartHTP(false)
+          setCanEndHTP(false)
+          setIsOnHTP(false)
         }
       }
     } catch (error) {
@@ -476,6 +499,88 @@ export default function ColaboradorDashboard() {
     }
   }
 
+  // Função para registrar HTP (Hora Trabalho Pedagógico)
+  const handleHTPAction = async (tipo: 'inicio-htp' | 'fim-htp') => {
+    try {
+      setIsSubmittingPonto(true)
+      let requestBody = {}
+      
+      // Verificar se geolocalização é obrigatória
+      if (SYSTEM_CONFIG.GEOLOCATION.ENABLED) {
+        if (!location?.success) {
+          alert('Localização é obrigatória para registrar HTP. Por favor, permita o acesso à sua localização.')
+          setShowLocationPermissionModal(true)
+          return
+        }
+
+        // Verificar se está dentro da área permitida
+        if (!location.isWithinAllowedRadius) {
+          alert(`Você deve estar no local de trabalho para registrar HTP. ${locationStatus.message}`)
+          return
+        }
+        
+        // Verificar se as coordenadas são válidas
+        if (!location.coordinates?.latitude || !location.coordinates?.longitude) {
+          alert('Erro: Coordenadas de localização inválidas. Tente novamente.')
+          refreshLocation()
+          return
+        }
+        
+        requestBody = {
+          location: {
+            latitude: location.coordinates.latitude,
+            longitude: location.coordinates.longitude,
+            accuracy: location.coordinates.accuracy
+          }
+        }
+      }
+
+      const response = await fetch(`/api/pontos/${tipo}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(requestBody)
+      })
+
+      const data = await response.json()
+
+      if (data.success) {
+        await loadTodayData()
+        const action = tipo === 'inicio-htp' ? 'Início do HTP' : 'Fim do HTP'
+        showSuccessMessage(
+          tipo as any,
+          data.horaInicioHtp || data.horaFimHtp,
+          data.location?.distance,
+          data.location?.validated ? 'Localização validada com sucesso!' : undefined
+        )
+      } else {
+        // Tratar diferentes tipos de erro
+        if (data.error?.includes('Não foi encontrado registro') && tipo === 'fim-htp') {
+          showInfoMessage(
+            'warning',
+            'HTP Não Iniciado',
+            'Para encerrar o HTP, primeiro você precisa iniciá-lo.',
+            'Inicie o HTP antes de tentar encerrá-lo.'
+          )
+        } else if (data.error?.includes('Já existe')) {
+          const action = tipo === 'inicio-htp' ? 'Início do HTP' : 'Fim do HTP'
+          showInfoMessage(
+            'warning',
+            `${action} Já Registrado`,
+            `Você já registrou o ${action.toLowerCase()} hoje.`,
+            `${action}: ${tipo === 'inicio-htp' ? (todayRecord as any)?.inicioHtp : (todayRecord as any)?.fimHtp || 'Não disponível'}`
+          )
+        } else {
+          alert(data.error || `Erro ao registrar ${tipo === 'inicio-htp' ? 'início' : 'fim'} do HTP`)
+        }
+      }
+    } catch (error) {
+      console.error(`Erro ao registrar ${tipo}:`, error)
+      alert(`Erro ao registrar ${tipo === 'inicio-htp' ? 'início' : 'fim'} do HTP`)
+    } finally {
+      setIsSubmittingPonto(false)
+    }
+  }
+
   const formatTime = (date: Date) => {
     return date.toLocaleTimeString('pt-BR', {
       hour: '2-digit',
@@ -504,7 +609,7 @@ export default function ColaboradorDashboard() {
   }
 
   const showSuccessMessage = (
-    type: 'entrada' | 'saida' | 'inicio-almoco' | 'fim-almoco',
+    type: 'entrada' | 'saida' | 'inicio-almoco' | 'fim-almoco' | 'inicio-htp' | 'fim-htp',
     time: string,
     distance?: number,
     customMessage?: string
@@ -694,6 +799,45 @@ export default function ColaboradorDashboard() {
                   </button>
                 </div>
 
+                {/* Botões HTP - Apenas para Docentes */}
+                {usuario?.tipoColaborador === 'docente' && (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <button
+                      onClick={() => handleHTPAction('inicio-htp')}
+                      disabled={!canStartHTP || isSubmittingPonto || (SYSTEM_CONFIG.GEOLOCATION.ENABLED && (!location?.success || !location?.isWithinAllowedRadius))}
+                      className={`py-4 px-6 rounded-xl font-semibold text-lg flex items-center justify-center space-x-3 transition-all duration-300 ${
+                        canStartHTP && !isSubmittingPonto && (!SYSTEM_CONFIG.GEOLOCATION.ENABLED || (location?.success && location?.isWithinAllowedRadius))
+                          ? 'bg-gradient-to-r from-purple-500 to-purple-600 hover:from-purple-600 hover:to-purple-700 text-white shadow-lg hover:shadow-xl transform hover:scale-105'
+                          : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                      }`}
+                    >
+                      {isSubmittingPonto ? (
+                        <FaSpinner className="animate-spin text-xl" />
+                      ) : (
+                        <FaGraduationCap className="text-xl" />
+                      )}
+                      <span>Iniciar HTP</span>
+                    </button>
+
+                    <button
+                      onClick={() => handleHTPAction('fim-htp')}
+                      disabled={!canEndHTP || isSubmittingPonto || (SYSTEM_CONFIG.GEOLOCATION.ENABLED && (!location?.success || !location?.isWithinAllowedRadius))}
+                      className={`py-4 px-6 rounded-xl font-semibold text-lg flex items-center justify-center space-x-3 transition-all duration-300 ${
+                        canEndHTP && !isSubmittingPonto && (!SYSTEM_CONFIG.GEOLOCATION.ENABLED || (location?.success && location?.isWithinAllowedRadius))
+                          ? 'bg-gradient-to-r from-indigo-500 to-indigo-600 hover:from-indigo-600 hover:to-indigo-700 text-white shadow-lg hover:shadow-xl transform hover:scale-105'
+                          : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                      }`}
+                    >
+                      {isSubmittingPonto ? (
+                        <FaSpinner className="animate-spin text-xl" />
+                      ) : (
+                        <FaPause className="text-xl" />
+                      )}
+                      <span>Finalizar HTP</span>
+                    </button>
+                  </div>
+                )}
+
                 {/* Informações de Segurança */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className={`rounded-lg p-4 border ${
@@ -772,7 +916,9 @@ export default function ColaboradorDashboard() {
                 Resumo de Hoje
               </h3>
               
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+              <div className={`grid grid-cols-1 md:grid-cols-2 gap-4 ${
+                usuario?.tipoColaborador === 'docente' ? 'lg:grid-cols-3' : 'lg:grid-cols-4'
+              }`}>
                 {/* Entrada */}
                 <div className="bg-gradient-to-r from-green-50 to-green-100 rounded-xl p-4 border border-green-200">
                   <div className="flex items-center mb-3">
@@ -814,6 +960,37 @@ export default function ColaboradorDashboard() {
                     {todayRecord?.fimAlmoco ? 'Finalizado' : 'Pendente'}
                   </p>
                 </div>
+
+                {/* HTP - Apenas para Docentes */}
+                {usuario?.tipoColaborador === 'docente' && (
+                  <>
+                    <div className="bg-gradient-to-r from-purple-50 to-purple-100 rounded-xl p-4 border border-purple-200">
+                      <div className="flex items-center mb-3">
+                        <FaGraduationCap className="text-purple-600 text-xl mr-2" />
+                        <h4 className="font-bold text-purple-900">Início HTP</h4>
+                      </div>
+                      <div className="text-2xl font-bold text-purple-800 mb-1">
+                        {todayRecord?.inicioHtp || '--:--'}
+                      </div>
+                      <p className="text-purple-700 text-xs">
+                        {todayRecord?.inicioHtp ? 'Registrado' : 'Não iniciado'}
+                      </p>
+                    </div>
+
+                    <div className="bg-gradient-to-r from-indigo-50 to-indigo-100 rounded-xl p-4 border border-indigo-200">
+                      <div className="flex items-center mb-3">
+                        <FaPause className="text-indigo-600 text-xl mr-2" />
+                        <h4 className="font-bold text-indigo-900">Fim HTP</h4>
+                      </div>
+                      <div className="text-2xl font-bold text-indigo-800 mb-1">
+                        {todayRecord?.fimHtp || '--:--'}
+                      </div>
+                      <p className="text-indigo-700 text-xs">
+                        {todayRecord?.fimHtp ? 'Finalizado' : 'Pendente'}
+                      </p>
+                    </div>
+                  </>
+                )}
 
                 {/* Saída */}
                 <div className="bg-gradient-to-r from-red-50 to-red-100 rounded-xl p-4 border border-red-200">
@@ -951,6 +1128,106 @@ export default function ColaboradorDashboard() {
                   </div>
                   <FaArrowRight className="text-orange-600" />
                 </Link>
+              </div>
+            </div>
+
+            {/* Informações do Colaborador */}
+            <div className="bg-white/95 backdrop-blur-sm rounded-2xl shadow-2xl p-6 border border-white/20">
+              <h3 className="text-xl font-bold text-gray-900 mb-4">
+                Minhas Informações
+              </h3>
+              <div className="space-y-4">
+                {/* Tipo de Colaborador */}
+                <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                  <div className="flex items-center">
+                    {usuario?.tipoColaborador === 'docente' ? (
+                      <FaGraduationCap className="text-purple-600 mr-3 text-lg" />
+                    ) : usuario?.tipoColaborador === 'administrativo' ? (
+                      <FaUser className="text-gray-600 mr-3 text-lg" />
+                    ) : (
+                      <FaExclamationTriangle className="text-orange-500 mr-3 text-lg" />
+                    )}
+                    <div>
+                      <p className="font-medium text-gray-900">Tipo de Colaborador</p>
+                      <p className="text-sm text-gray-600">
+                        {usuario?.tipoColaborador === 'docente' && '👨‍🏫 Docente - Acesso ao HTP'}
+                        {usuario?.tipoColaborador === 'administrativo' && '👨‍💼 Administrativo'}
+                        {!usuario?.tipoColaborador && '⚠️ Não definido - Entre em contato com o administrador'}
+                      </p>
+                    </div>
+                  </div>
+                  {usuario?.tipoColaborador && (
+                    <div className={`px-3 py-1 rounded-full text-xs font-medium ${
+                      usuario.tipoColaborador === 'docente' 
+                        ? 'bg-purple-100 text-purple-800' 
+                        : 'bg-gray-100 text-gray-800'
+                    }`}>
+                      {usuario.tipoColaborador === 'docente' ? 'Docente' : 'Administrativo'}
+                    </div>
+                  )}
+                </div>
+
+                {/* Coordenação */}
+                <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                  <div className="flex items-center">
+                    <FaBuilding className="text-blue-600 mr-3 text-lg" />
+                    <div className="flex-1">
+                      <p className="font-medium text-gray-900">Coordenações</p>
+                      {usuario?.coordenacoes && usuario.coordenacoes.length > 0 ? (
+                        <div className="flex flex-wrap gap-2 mt-1">
+                          {usuario.coordenacoes.map(coord => (
+                            <div key={coord.id} className="px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                              {coord.nome}
+                            </div>
+                          ))}
+                        </div>
+                      ) : usuario?.coordenacaoNome ? (
+                        /* Fallback para formato legado */
+                        <div className="flex flex-wrap gap-2 mt-1">
+                          <div className="px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                            {usuario.coordenacaoNome}
+                          </div>
+                        </div>
+                      ) : (
+                        <p className="text-sm text-gray-600">
+                          Não atribuído a uma coordenação
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                  {((usuario?.coordenacoes && usuario.coordenacoes.length > 0) || usuario?.coordenacaoNome) && (
+                    <div className="px-3 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                      Vinculado
+                    </div>
+                  )}
+                </div>
+
+                {/* Níveis Hierárquicos */}
+                <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                  <div className="flex items-center">
+                    <FaUser className="text-green-600 mr-3 text-lg" />
+                    <div>
+                      <p className="font-medium text-gray-900">Níveis de Acesso</p>
+                      <p className="text-sm text-gray-600">
+                        Permissões do sistema
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex flex-wrap gap-1">
+                    {usuario?.niveisHierarquicos.map((nivel) => (
+                      <span
+                        key={nivel}
+                        className={`px-2 py-1 rounded text-xs font-medium ${
+                          nivel === 'administrador' ? 'bg-red-100 text-red-800' :
+                          nivel === 'coordenador' ? 'bg-blue-100 text-blue-800' :
+                          'bg-green-100 text-green-800'
+                        }`}
+                      >
+                        {nivel}
+                      </span>
+                    ))}
+                  </div>
+                </div>
               </div>
             </div>
 

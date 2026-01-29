@@ -73,12 +73,12 @@ export default function NivelSelector({ className = '', compact = false }: Nivel
     try {
       const sucesso = await trocarNivel(novoNivel)
       if (sucesso) {
-        setIsOpen(false)
+        // Força o recarregamento da página para ir para o dashboard correto
+        window.location.href = '/dashboard'
       }
     } catch (error) {
       console.error('Erro ao trocar nível:', error)
-    } finally {
-      setIsTrocando(false)
+      setIsTrocando(false) // Garante que o estado de troca seja resetado em caso de erro
     }
   }
 

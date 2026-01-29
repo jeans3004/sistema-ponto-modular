@@ -134,7 +134,7 @@ export default function Home() {
                     </div>
                     <div className="ml-3">
                       <p className="font-medium text-gray-900">João Professor</p>
-                      <p className="text-sm text-gray-600">professor@christmaster.com</p>
+                      <p className="text-sm text-gray-600">professor@exemplo.com</p>
                     </div>
                   </div>
                   
@@ -242,7 +242,7 @@ export default function Home() {
           <div className="flex flex-col md:flex-row justify-between items-center">
             <div className="text-center md:text-left mb-4 md:mb-0">
               <p className="text-blue-200">
-                © 2025 Centro de Educação Integral Christ Master
+                © 2025 Desenvolvido por Jean Machado
               </p>
               <p className="text-blue-300 text-sm">
                 Sistema de Controle de Pontos - Todos os direitos reservados

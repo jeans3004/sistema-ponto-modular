@@ -1,8 +1,8 @@
 'use client'
 
 import { useSession } from 'next-auth/react'
-import { useRouter } from 'next/navigation'
-import { useState, useEffect } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
+import { useState, useEffect, Suspense } from 'react'
 import Header from '@/components/dashboard/Header'
 import DevelopmentModal from '@/components/ui/DevelopmentModal'
 import { formatDate } from '@/lib/utils'
@@ -31,9 +31,18 @@ interface HistoricoRecord {
   totalHoras: string
 }
 
-export default function HistoricoPage() {
+export default function HistoricoPageWrapper() {
+  return (
+    <Suspense fallback={<div className="min-h-screen flex items-center justify-center"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div></div>}>
+      <HistoricoPage />
+    </Suspense>
+  )
+}
+
+function HistoricoPage() {
   const { data: session, status } = useSession()
   const router = useRouter()
+  const searchParams = useSearchParams()
   
   // Estados principais para dados e interface
   const [registros, setRegistros] = useState<HistoricoRecord[]>([])
@@ -41,6 +50,8 @@ export default function HistoricoPage() {
   const [filtroMes, setFiltroMes] = useState(new Date().getMonth())
   const [filtroAno, setFiltroAno] = useState(new Date().getFullYear())
   const [currentTime, setCurrentTime] = useState(new Date())
+  const [funcionarioEspecifico, setFuncionarioEspecifico] = useState<string | null>(null)
+  const [nomeFuncionario, setNomeFuncionario] = useState<string>('')
   
   // Estados para controle dos modais de desenvolvimento
   // Estes estados controlam quando cada modal específico deve aparecer
@@ -58,21 +69,45 @@ export default function HistoricoPage() {
     return () => clearInterval(timer)
   }, [])
 
+  // Verificar parâmetro de funcionário na URL
+  useEffect(() => {
+    const funcionarioParam = searchParams.get('funcionario')
+    if (funcionarioParam) {
+      setFuncionarioEspecifico(funcionarioParam)
+      // Buscar nome do funcionário (opcional, pode ser implementado depois)
+      setNomeFuncionario(funcionarioParam.split('@')[0])
+    }
+  }, [searchParams])
+
   useEffect(() => {
     if (status === 'unauthenticated') {
       router.push('/login')
     } else if (session) {
       loadHistorico()
     }
-  }, [status, session, router])
+  }, [status, session, router, funcionarioEspecifico])
 
   const loadHistorico = async () => {
     try {
-      const response = await fetch('/api/pontos/historico')
+      const url = funcionarioEspecifico 
+        ? `/api/pontos/historico?funcionario=${funcionarioEspecifico}`
+        : '/api/pontos/historico'
+      
+      const response = await fetch(url)
       const data = await response.json()
+      
+      if (data.error) {
+        console.error('Erro da API:', data.error)
+        return
+      }
       
       if (data.pontos) {
         setRegistros(data.pontos)
+        
+        // Debug apenas se não houver registros
+        if (data.pontos.length === 0 && funcionarioEspecifico) {
+          console.log('Nenhum registro encontrado para:', funcionarioEspecifico)
+        }
       }
     } catch (error) {
       console.error('Erro ao carregar histórico:', error)
@@ -145,11 +180,22 @@ export default function HistoricoPage() {
             <div className="flex flex-col md:flex-row justify-between items-center">
               <div className="text-center md:text-left mb-4 md:mb-0">
                 <h1 className="text-3xl font-bold text-white mb-2">
-                  Histórico de Pontos
+                  {funcionarioEspecifico ? `Histórico de ${nomeFuncionario}` : 'Histórico de Pontos'}
                 </h1>
                 <p className="text-blue-200 text-lg">
-                  Visualize e analise seus registros de ponto
+                  {funcionarioEspecifico 
+                    ? `Registros de ponto de ${funcionarioEspecifico}`
+                    : 'Visualize e analise seus registros de ponto'
+                  }
                 </p>
+                {funcionarioEspecifico && (
+                  <button
+                    onClick={() => router.push('/historico')}
+                    className="mt-2 inline-flex items-center px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm transition-colors"
+                  >
+                    ← Voltar ao meu histórico
+                  </button>
+                )}
               </div>
               <div className="text-center">
                 <div className="text-2xl font-bold text-white mb-2">
@@ -389,9 +435,20 @@ export default function HistoricoPage() {
                 <h3 className="text-lg font-medium text-gray-900 mb-2">
                   Nenhum registro encontrado
                 </h3>
-                <p className="text-gray-500">
-                  Não há registros de ponto para o período selecionado.
+                <p className="text-gray-500 mb-4">
+                  {funcionarioEspecifico 
+                    ? `Não há registros de ponto para ${funcionarioEspecifico} no período selecionado.`
+                    : 'Não há registros de ponto para o período selecionado.'
+                  }
                 </p>
+                {funcionarioEspecifico && registros.length === 0 && (
+                  <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 text-left">
+                    <p className="text-sm text-yellow-800">
+                      <strong>Dica:</strong> Este funcionário pode não ter nenhum registro de ponto ainda. 
+                      Verifique se o email está correto ou se o funcionário já fez algum registro no sistema.
+                    </p>
+                  </div>
+                )}
               </div>
             </div>
           )}

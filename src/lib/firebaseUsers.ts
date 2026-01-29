@@ -1,4 +1,5 @@
 import { adminDb } from './firebaseAdmin'
+import admin from 'firebase-admin'
 import { Usuario, NivelHierarquico, PERMISSOES_SISTEMA } from '@/types/usuario'
 
 // Collection do Firestore
@@ -32,7 +33,7 @@ export async function criarOuAtualizarUsuario(
         niveisHierarquicos: ['colaborador'],
         nivelAtivo: 'colaborador',
         status: 'pendente', // Precisa de aprovação
-        dataCadastro: new Date(),
+        dataCadastro: admin.firestore.FieldValue.serverTimestamp() as unknown as Date,
         ultimoAcesso: new Date(),
       }
 
@@ -178,21 +179,35 @@ export async function trocarNivelAtivo(
 // Função para definir horários de trabalho (Coordenador)
 export async function definirHorarioTrabalho(
   emailFuncionario: string,
-  horarios: {
-    entrada: string
-    saida: string
-    inicioAlmoco: string
-    fimAlmoco: string
-  },
-  emailCoordenador: string
+  horarios: any, // Pode ser horário geral, por dias, ou formato flexível
+  emailCoordenador: string,
+  tipoHorario: 'geral' | 'dias' = 'geral'
 ): Promise<void> {
   try {
+    // Estruturar os dados de configuração baseado no tipo
+    let configuracaoHorario: any = {
+      tipoHorario: tipoHorario,
+      definidoPor: emailCoordenador,
+      dataDefinicao: admin.firestore.FieldValue.serverTimestamp(),
+    }
+    
+    if (tipoHorario === 'geral') {
+      configuracaoHorario.horarioTrabalho = horarios
+    } else {
+      // Para dias - suportar tanto formato antigo quanto novo
+      if (horarios.geral && horarios.diasEspecificos !== undefined) {
+        // Novo formato flexível
+        configuracaoHorario.horarioGeral = horarios.geral
+        configuracaoHorario.diasEspecificos = horarios.diasEspecificos
+        configuracaoHorario.horarioTrabalho = horarios // manter para compatibilidade
+      } else {
+        // Formato antigo ou simples
+        configuracaoHorario.horarioTrabalho = horarios
+      }
+    }
+    
     await adminDb.collection(COLLECTION_USUARIOS).doc(emailFuncionario).update({
-      configuracoes: {
-        horarioTrabalho: horarios,
-        definidoPor: emailCoordenador,
-        dataDefinicao: new Date(),
-      },
+      configuracoes: configuracaoHorario,
     })
   } catch (error) {
     console.error('Erro ao definir horário de trabalho:', error)

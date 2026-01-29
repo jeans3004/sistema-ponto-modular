@@ -18,6 +18,10 @@ export interface RegistroPonto {
   fimAlmoco?: string
   tempoAlmoco?: string // Calculado automaticamente
   totalHoras?: string
+  // Campos HTP (Hora Trabalho Pedagógico) - para docentes
+  inicioHtp?: string
+  fimHtp?: string
+  totalHorasHtp?: string
   observacoes?: string
 }
 
@@ -40,6 +44,11 @@ export interface StatusPonto {
   fimAlmoco: boolean
   podeIniciarAlmoco: boolean
   podeFinalizarAlmoco: boolean
+  // Status HTP para docentes
+  inicioHtp: boolean
+  fimHtp: boolean
+  podeIniciarHtp: boolean
+  podeFinalizarHtp: boolean
 }
 
 export interface DashboardData {

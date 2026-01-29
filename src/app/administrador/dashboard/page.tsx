@@ -13,29 +13,20 @@ import {
   FaClock, 
   FaUsers,
   FaChartLine,
-  FaHistory,
   FaCheckCircle,
   FaUser,
   FaArrowRight,
   FaEdit,
-  FaEye,
   FaSearch,
-  FaDownload,
-  FaExclamationTriangle,
   FaCheck,
-  FaTimes,
-  FaInfoCircle,
   FaUserCheck,
-  FaClipboardList,
-  FaCog,
   FaDatabase,
   FaShieldAlt,
-  FaUserPlus,
-  FaUserTimes,
   FaBan,
   FaUndo,
-  FaTrash,
-  FaFileAlt
+  FaBuilding,
+  FaUserTag,
+  FaTimes
 } from 'react-icons/fa'
 
 interface Usuario {
@@ -50,6 +41,13 @@ interface Usuario {
   dataAprovacao?: any
   dataCadastro?: any
   dataAlteracao?: any
+  coordenacoes?: {
+    id: string
+    nome: string
+  }[]
+  coordenacaoId?: string
+  coordenacaoNome?: string
+  tipoColaborador?: 'docente' | 'administrativo'
 }
 
 interface SystemStats {
@@ -70,6 +68,7 @@ export default function AdministradorDashboard() {
   
   // Estados principais
   const [usuarios, setUsuarios] = useState<Usuario[]>([])
+  const [coordenacoes, setCoordenacoes] = useState<{id: string, nome: string}[]>([])
   const [stats, setStats] = useState<SystemStats | null>(null)
   const [isLoadingData, setIsLoadingData] = useState(true)
   const [currentTime, setCurrentTime] = useState(new Date())
@@ -77,8 +76,9 @@ export default function AdministradorDashboard() {
   // Estados para gerenciamento de usuários
   const [selectedUser, setSelectedUser] = useState<Usuario | null>(null)
   const [showUserModal, setShowUserModal] = useState(false)
-  const [actionType, setActionType] = useState<'aprovar' | 'rejeitar' | 'alterar' | 'inativar'>('aprovar')
+  const [actionType, setActionType] = useState<'aprovar' | 'rejeitar' | 'alterar' | 'inativar' | 'coordenacao'>('aprovar')
   const [selectedLevels, setSelectedLevels] = useState<NivelHierarquico[]>([])
+  const [selectedCoordenacao, setSelectedCoordenacao] = useState('')
   const [isSubmittingAction, setIsSubmittingAction] = useState(false)
   
   // Estados para filtros e busca
@@ -119,11 +119,18 @@ export default function AdministradorDashboard() {
     try {
       setIsLoadingData(true)
       
-      // Carregar todos os usuários
-      const usuariosResponse = await fetch('/api/admin/usuarios')
+      // Carregar todos os usuários com dados de coordenação
+      console.log('🔄 Carregando usuários...')
+      const usuariosResponse = await fetch('/api/admin/usuarios-coordenacoes', {
+        credentials: 'include' // Incluir cookies de sessão
+      })
       const usuariosData = await usuariosResponse.json()
       
+      console.log('📋 Resposta da API usuários:', usuariosData)
+      console.log('📋 Status da resposta:', usuariosResponse.status)
+      
       if (usuariosData.success) {
+        console.log('✅ Usuários carregados:', usuariosData.usuarios.length)
         setUsuarios(usuariosData.usuarios)
         
         // Calcular estatísticas
@@ -139,7 +146,41 @@ export default function AdministradorDashboard() {
         }
         
         setStats(stats)
+      } else {
+        console.error('❌ Erro ao carregar usuários:', usuariosData.error)
+        setUsuarios([])
+        
+        // Estatísticas vazias em caso de erro
+        const statsVazias: SystemStats = {
+          totalUsuarios: 0,
+          usuariosAtivos: 0,
+          usuariosPendentes: 0,
+          usuariosInativos: 0,
+          totalAdmins: 0,
+          totalCoordenadores: 0,
+          totalColaboradores: 0,
+          registrosHoje: 0
+        }
+        
+        setStats(statsVazias)
       }
+
+      // Carregar coordenações
+      console.log('🔄 Carregando coordenações...')
+      const coordenacoesResponse = await fetch('/api/admin/coordenacoes', {
+        credentials: 'include' // Incluir cookies de sessão
+      })
+      const coordenacoesData = await coordenacoesResponse.json()
+      
+      console.log('🏢 Resposta da API coordenações:', coordenacoesData)
+      
+      if (coordenacoesData.success) {
+        console.log('✅ Coordenações carregadas:', coordenacoesData.coordenacoes.length)
+        setCoordenacoes(coordenacoesData.coordenacoes)
+      } else {
+        console.error('❌ Erro ao carregar coordenações:', coordenacoesData.error)
+      }
+      
     } catch (error) {
       console.error('Erro ao carregar dados do administrador:', error)
     } finally {
@@ -156,6 +197,11 @@ export default function AdministradorDashboard() {
       setSelectedLevels(['colaborador'])
     } else if (action === 'alterar') {
       setSelectedLevels(user.niveisHierarquicos)
+    } else if (action === 'coordenacao') {
+      // Configurar coordenação selecionada
+      setSelectedCoordenacao(user.coordenacaoId || '')
+      console.log('🏢 Configurando coordenação para:', user.nome, 'coordenação atual:', user.coordenacaoId)
+      setSelectedLevels([])
     } else {
       setSelectedLevels([])
     }
@@ -168,38 +214,91 @@ export default function AdministradorDashboard() {
     
     setIsSubmittingAction(true)
     try {
-      const body: any = {
-        acao: actionType,
-        emailUsuario: selectedUser.email
+      let response: Response
+      let body: Record<string, unknown> = {}
+
+      if (actionType === 'coordenacao') {
+        // Usar API de coordenações
+        body = {
+          emailUsuario: selectedUser.email
+        }
+
+        if (selectedCoordenacao) {
+          const coordenacao = coordenacoes.find(c => c.id === selectedCoordenacao)
+          body.acao = 'atribuir-coordenacao'
+          body.coordenacaoId = selectedCoordenacao
+          body.coordenacaoNome = coordenacao?.nome
+          console.log('🏢 Atribuindo coordenação:', {
+            usuario: selectedUser.email,
+            coordenacaoId: selectedCoordenacao,
+            coordenacaoNome: coordenacao?.nome
+          })
+        } else {
+          body.acao = 'remover-coordenacao'
+          console.log('🗑️ Removendo coordenação para:', selectedUser.email)
+        }
+
+        console.log('📤 Enviando dados para API:', body)
+        response = await fetch('/api/admin/usuarios-coordenacoes', {
+          method: 'POST',
+          headers: { 
+            'Content-Type': 'application/json',
+          },
+          credentials: 'include', // Importante: incluir cookies de sessão
+          body: JSON.stringify(body)
+        })
+        console.log('📥 Status da resposta:', response.status)
+      } else {
+        // Usar API de usuários original
+        body = {
+          acao: actionType === 'alterar' ? 'alterar-niveis' : actionType,
+          emailUsuario: selectedUser.email
+        }
+        
+        if (actionType === 'aprovar' || actionType === 'alterar') {
+          body.niveisHierarquicos = selectedLevels
+        }
+        
+        response = await fetch('/api/admin/usuarios', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          credentials: 'include', // Importante: incluir cookies de sessão
+          body: JSON.stringify(body)
+        })
       }
       
-      if (actionType === 'aprovar' || actionType === 'alterar') {
-        body.niveisHierarquicos = selectedLevels
+      // Verificar se a resposta é válida
+      if (!response.ok) {
+        console.error('❌ Resposta HTTP não OK:', response.status, response.statusText)
+        const responseText = await response.text()
+        console.error('📄 Conteúdo da resposta bruta:', responseText)
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`)
       }
-      
-      const response = await fetch('/api/admin/usuarios', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(body)
-      })
       
       const data = await response.json()
+      console.log('📋 Resposta da API:', data)
       
       if (data.success) {
         const actionMessages = {
           aprovar: 'Usuário aprovado com sucesso!',
           rejeitar: 'Usuário rejeitado com sucesso!',
           alterar: 'Níveis do usuário alterados com sucesso!',
-          inativar: 'Usuário inativado com sucesso!'
+          inativar: 'Usuário inativado com sucesso!',
+          coordenacao: 'Coordenação atualizada com sucesso!'
         }
         
+        console.log('✅ Operação bem-sucedida!')
         alert(actionMessages[actionType])
         setShowUserModal(false)
         await loadAdminData() // Recarregar dados
       } else {
-        alert(data.error || 'Erro na operação')
+        console.error('❌ Erro na operação:', data.error || data.message)
+        console.error('📋 Detalhes:', data)
+        
+        const errorMsg = data.error || data.message || data.details || `Erro na operação - Status: ${response.status}`
+        alert(`Erro: ${errorMsg}`)
       }
     } catch (error) {
       console.error('Erro na ação do usuário:', error)
@@ -366,21 +465,199 @@ export default function AdministradorDashboard() {
           </div>
         )}
 
+        {/* Gestão Rápida de Funcionários */}
+        <div className="bg-white/95 backdrop-blur-sm rounded-2xl shadow-2xl border border-white/20 overflow-hidden mb-8">
+          <div className="p-6 border-b border-gray-200">
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="text-2xl font-bold text-gray-900">Gestão Rápida de Funcionários</h2>
+                <p className="text-gray-600 mt-2">
+                  Últimos usuários cadastrados - Atribua coordenações e tipos
+                </p>
+              </div>
+              <button
+                onClick={() => router.push('/administrador/funcionarios')}
+                className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg transition-colors flex items-center"
+              >
+                <FaEdit className="mr-2" />
+                Ver Todos
+              </button>
+            </div>
+          </div>
+
+          <div className="p-6">
+            {isLoadingData ? (
+              <div className="flex items-center justify-center py-8">
+                <FaSpinner className="animate-spin text-2xl text-gray-400 mr-3" />
+                <span className="text-gray-600">Carregando funcionários...</span>
+              </div>
+            ) : usuarios.length === 0 ? (
+              <div className="text-center py-8">
+                <FaUsers className="text-4xl text-gray-300 mx-auto mb-3" />
+                <p className="text-gray-500 mb-2">Nenhum funcionário encontrado</p>
+                <p className="text-xs text-gray-400">Verifique se há usuários cadastrados no sistema</p>
+                <button
+                  onClick={async () => {
+                    try {
+                      const debugResponse = await fetch('/api/debug')
+                      const debugData = await debugResponse.json()
+                      console.log('🔍 Debug Firebase:', debugData)
+                      alert('Debug executado - veja o console')
+                    } catch (error) {
+                      console.error('Erro no debug:', error)
+                    }
+                  }}
+                  className="mt-3 text-blue-600 hover:text-blue-800 text-sm underline"
+                >
+                  Debug Firebase
+                </button>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {usuarios.slice(0, 5).map((user) => (
+                  <div key={user.email} className="flex items-center justify-between p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
+                    <div className="flex items-center">
+                      {user.foto ? (
+                        <img
+                          src={user.foto}
+                          alt={user.nome}
+                          className="h-10 w-10 rounded-full mr-3"
+                        />
+                      ) : (
+                        <div className="h-10 w-10 bg-indigo-600 rounded-full flex items-center justify-center mr-3">
+                          <FaUser className="text-white text-sm" />
+                        </div>
+                      )}
+                      <div>
+                        <div className="font-medium text-gray-900">{user.nome}</div>
+                        <div className="text-sm text-gray-500">{user.email}</div>
+                      </div>
+                    </div>
+                    
+                    <div className="flex items-center space-x-3">
+                      {/* Status das Coordenações */}
+                      <div className="text-center">
+                        <div className="text-xs text-gray-500 mb-1">Coordenações</div>
+                        {user.coordenacoes && user.coordenacoes.length > 0 ? (
+                          <div className="flex flex-wrap gap-1 justify-center max-w-24">
+                            {user.coordenacoes.slice(0, 2).map(coord => (
+                              <div key={coord.id} className="text-xs font-medium text-blue-600 bg-blue-50 px-2 py-1 rounded">
+                                {coord.nome.length > 8 ? coord.nome.substring(0, 8) + '...' : coord.nome}
+                              </div>
+                            ))}
+                            {user.coordenacoes.length > 2 && (
+                              <div className="text-xs text-blue-600 bg-blue-50 px-2 py-1 rounded">
+                                +{user.coordenacoes.length - 2}
+                              </div>
+                            )}
+                          </div>
+                        ) : user.coordenacaoNome ? (
+                          /* Fallback para formato legado */
+                          <div className="text-xs font-medium text-blue-600 bg-blue-50 px-2 py-1 rounded">
+                            {user.coordenacaoNome}
+                          </div>
+                        ) : (
+                          <div className="text-xs text-gray-400 bg-gray-100 px-2 py-1 rounded">
+                            Não atribuída
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Status do Tipo */}
+                      <div className="text-center">
+                        <div className="text-xs text-gray-500 mb-1">Tipo</div>
+                        {user.tipoColaborador ? (
+                          <div className={`text-xs font-medium px-2 py-1 rounded ${
+                            user.tipoColaborador === 'docente' 
+                              ? 'text-purple-600 bg-purple-50' 
+                              : 'text-gray-600 bg-gray-50'
+                          }`}>
+                            {user.tipoColaborador === 'docente' ? '👨‍🏫 Docente' : '👨‍💼 Admin'}
+                          </div>
+                        ) : (
+                          <div className="text-xs text-orange-500 bg-orange-50 px-2 py-1 rounded">
+                            Não definido
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Ações Rápidas */}
+                      <div className="flex space-x-2">
+                        <button
+                          onClick={() => handleUserAction(user, 'coordenacao')}
+                          className="text-blue-600 hover:text-blue-800 transition-colors p-1"
+                          title="Atribuir Coordenação"
+                        >
+                          <FaBuilding />
+                        </button>
+                        <button
+                          onClick={() => handleUserAction(user, 'alterar')}
+                          className="text-green-600 hover:text-green-800 transition-colors p-1"
+                          title="Alterar Níveis"
+                        >
+                          <FaUserTag />
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+
         {/* Ações Rápidas do Sistema */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
           <div className="bg-white/95 backdrop-blur-sm rounded-2xl shadow-2xl p-6 border border-white/20">
             <h3 className="text-xl font-bold text-gray-900 mb-4">Ações do Sistema</h3>
             <div className="space-y-3">
+              {session?.user?.email === 'jean.machado1997@gmail.com' && (
+                <button
+                  onClick={() => router.push('/admin/setup')}
+                  className="w-full flex items-center p-3 bg-gradient-to-r from-red-50 to-red-100 rounded-xl hover:from-red-100 hover:to-red-200 transition-all duration-200 border border-red-200"
+                >
+                  <FaShieldAlt className="text-red-600 mr-3 text-lg" />
+                  <div className="flex-1 text-left">
+                    <p className="font-semibold text-red-900">Setup do Sistema</p>
+                    <p className="text-sm text-red-700">Configurações iniciais</p>
+                  </div>
+                  <FaArrowRight className="text-red-600" />
+                </button>
+              )}
               <button
-                onClick={() => router.push('/admin/setup')}
-                className="w-full flex items-center p-3 bg-gradient-to-r from-red-50 to-red-100 rounded-xl hover:from-red-100 hover:to-red-200 transition-all duration-200 border border-red-200"
+                onClick={() => router.push('/administrador/database')}
+                className="w-full flex items-center p-3 bg-gradient-to-r from-teal-50 to-teal-100 rounded-xl hover:from-teal-100 hover:to-teal-200 transition-all duration-200 border border-teal-200"
               >
-                <FaShieldAlt className="text-red-600 mr-3 text-lg" />
+                <FaDatabase className="text-teal-600 mr-3 text-lg" />
                 <div className="flex-1 text-left">
-                  <p className="font-semibold text-red-900">Setup do Sistema</p>
-                  <p className="text-sm text-red-700">Configurações iniciais</p>
+                  <p className="font-semibold text-teal-900">Banco de Dados</p>
+                  <p className="text-sm text-teal-700">Visualizar dados do Firebase</p>
                 </div>
-                <FaArrowRight className="text-red-600" />
+                <FaArrowRight className="text-teal-600" />
+              </button>
+
+              <button
+                onClick={() => router.push('/administrador/funcionarios')}
+                className="w-full flex items-center p-3 bg-gradient-to-r from-indigo-50 to-indigo-100 rounded-xl hover:from-indigo-100 hover:to-indigo-200 transition-all duration-200 border border-indigo-200"
+              >
+                <FaUsers className="text-indigo-600 mr-3 text-lg" />
+                <div className="flex-1 text-left">
+                  <p className="font-semibold text-indigo-900">Gestão de Funcionários</p>
+                  <p className="text-sm text-indigo-700">Gerenciar coordenações e tipos</p>
+                </div>
+                <FaArrowRight className="text-indigo-600" />
+              </button>
+              
+              <button
+                onClick={() => router.push('/administrador/coordenacoes')}
+                className="w-full flex items-center p-3 bg-gradient-to-r from-purple-50 to-purple-100 rounded-xl hover:from-purple-100 hover:to-purple-200 transition-all duration-200 border border-purple-200"
+              >
+                <FaBuilding className="text-purple-600 mr-3 text-lg" />
+                <div className="flex-1 text-left">
+                  <p className="font-semibold text-purple-900">Coordenações</p>
+                  <p className="text-sm text-purple-700">Gerenciar coordenações</p>
+                </div>
+                <FaArrowRight className="text-purple-600" />
               </button>
               
               <button
@@ -457,7 +734,7 @@ export default function AdministradorDashboard() {
                   placeholder="Buscar usuário..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                  className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent text-gray-900"
                 />
               </div>
             </div>
@@ -465,8 +742,8 @@ export default function AdministradorDashboard() {
             <div className="flex gap-2 flex-wrap">
               <select
                 value={filterStatus}
-                onChange={(e) => setFilterStatus(e.target.value as any)}
-                className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                onChange={(e) => setFilterStatus(e.target.value as 'todos' | 'ativo' | 'pendente' | 'inativo')}
+                className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent text-gray-900"
               >
                 <option value="todos">Todos os Status</option>
                 <option value="ativo">Ativos</option>
@@ -476,8 +753,8 @@ export default function AdministradorDashboard() {
               
               <select
                 value={filterLevel}
-                onChange={(e) => setFilterLevel(e.target.value as any)}
-                className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                onChange={(e) => setFilterLevel(e.target.value as 'todos' | NivelHierarquico)}
+                className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent text-gray-900"
               >
                 <option value="todos">Todos os Níveis</option>
                 <option value="administrador">Administradores</option>
@@ -572,7 +849,39 @@ export default function AdministradorDashboard() {
                     </td>
                     
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {user.dataCadastro ? new Date(user.dataCadastro.seconds * 1000).toLocaleDateString('pt-BR') : 'N/A'}
+                      {(() => {
+                        if (!user.dataCadastro) return 'N/A'
+                        
+                        try {
+                          let date
+                          
+                          // Firebase Timestamp format
+                          if (user.dataCadastro && typeof user.dataCadastro === 'object') {
+                            if ('seconds' in user.dataCadastro) {
+                              date = new Date(user.dataCadastro.seconds * 1000)
+                            } else if ('toDate' in user.dataCadastro && typeof user.dataCadastro.toDate === 'function') {
+                              date = user.dataCadastro.toDate()
+                            } else if ('_seconds' in user.dataCadastro) {
+                              date = new Date(user.dataCadastro._seconds * 1000)
+                            } else {
+                              date = new Date(user.dataCadastro)
+                            }
+                          } else if (typeof user.dataCadastro === 'string') {
+                            date = new Date(user.dataCadastro)
+                          } else {
+                            date = new Date(user.dataCadastro)
+                          }
+                          
+                          if (isNaN(date.getTime())) {
+                            return 'N/A'
+                          }
+                          
+                          return date.toLocaleDateString('pt-BR')
+                        } catch (error) {
+                          console.error('Erro ao formatar data do usuário:', user.email, error)
+                          return 'N/A'
+                        }
+                      })()}
                     </td>
                     
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
@@ -657,6 +966,7 @@ export default function AdministradorDashboard() {
                 {actionType === 'rejeitar' && 'Rejeitar Usuário'}
                 {actionType === 'alterar' && 'Alterar Níveis'}
                 {actionType === 'inativar' && 'Inativar Usuário'}
+                {actionType === 'coordenacao' && 'Gerenciar Coordenação'}
               </h2>
               <p className="text-gray-600">
                 {selectedUser.nome}
@@ -687,6 +997,122 @@ export default function AdministradorDashboard() {
                     </label>
                   ))}
                 </div>
+              </div>
+            )}
+
+            {actionType === 'coordenacao' && (
+              <div className="mb-6">
+                <label className="block text-sm font-medium text-gray-700 mb-3">
+                  Coordenação:
+                </label>
+                <div className="space-y-3">
+                  {/* Coordenações atuais do usuário */}
+                  {selectedUser?.coordenacoes && selectedUser.coordenacoes.length > 0 && (
+                    <div className="mb-3">
+                      <div className="text-sm font-medium text-gray-700 mb-2">Coordenações atuais:</div>
+                      <div className="flex flex-wrap gap-2">
+                        {selectedUser.coordenacoes.map(coord => (
+                          <div key={coord.id} className="bg-blue-100 text-blue-800 px-3 py-1 rounded-full text-sm flex items-center gap-2">
+                            {coord.nome}
+                            <button
+                              onClick={async () => {
+                                try {
+                                  const response = await fetch('/api/admin/usuarios-coordenacoes', {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    credentials: 'include',
+                                    body: JSON.stringify({
+                                      acao: 'remover-coordenacao',
+                                      emailUsuario: selectedUser.email,
+                                      coordenacaoId: coord.id
+                                    })
+                                  })
+                                  const data = await response.json()
+                                  if (data.success) {
+                                    await loadAdminData()
+                                    alert('Coordenação removida com sucesso!')
+                                  }
+                                } catch (error) {
+                                  console.error('Erro ao remover coordenação:', error)
+                                }
+                              }}
+                              className="text-blue-600 hover:text-blue-800 ml-1"
+                              title="Remover coordenação"
+                            >
+                              ×
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  
+                  {/* Adicionar nova coordenação */}
+                  <div>
+                    <div className="text-sm font-medium text-gray-700 mb-2">Adicionar coordenação:</div>
+                    <select
+                      value={selectedCoordenacao}
+                      onChange={(e) => setSelectedCoordenacao(e.target.value)}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent text-gray-900 bg-white"
+                    >
+                      <option value="" className="text-gray-500">Selecione uma coordenação</option>
+                      {coordenacoes.length === 0 ? (
+                        <option disabled className="text-gray-400">Carregando coordenações...</option>
+                      ) : (
+                        coordenacoes
+                          .filter(coord => !selectedUser?.coordenacoes?.some(userCoord => userCoord.id === coord.id))
+                          .map(coord => (
+                            <option key={coord.id} value={coord.id} className="text-gray-900">{coord.nome}</option>
+                          ))
+                      )}
+                    </select>
+                  </div>
+                </div>
+                {coordenacoes.length === 0 && (
+                  <div className="text-xs text-gray-500 mt-1">
+                    <p>Nenhuma coordenação encontrada</p>
+                    <div className="flex space-x-2 mt-2">
+                      <button
+                        onClick={async () => {
+                          try {
+                            const createResponse = await fetch('/api/create-sample-coordenacao', { 
+                              method: 'POST',
+                              credentials: 'include'
+                            })
+                            const createData = await createResponse.json()
+                            console.log('🏗️ Coordenações criadas:', createData)
+                            if (createData.success) {
+                              alert('Coordenações de exemplo criadas! Recarregando...')
+                              await loadAdminData()
+                            }
+                          } catch (error) {
+                            console.error('Erro ao criar coordenações:', error)
+                          }
+                        }}
+                        className="text-green-600 hover:text-green-800 underline"
+                      >
+                        Criar Coordenações
+                      </button>
+                      <button
+                        onClick={async () => {
+                          try {
+                            const authResponse = await fetch('/api/test-auth', {
+                              credentials: 'include'
+                            })
+                            const authData = await authResponse.json()
+                            console.log('🔐 Teste de Auth:', authData)
+                            alert(`Auth Test: ${authData.authResult?.success ? 'OK' : 'FALHOU'}\nUsuário: ${authData.authResult?.usuario?.email || 'N/A'}`)
+                          } catch (error) {
+                            console.error('Erro no teste de auth:', error)
+                          }
+                        }}
+                        className="text-blue-600 hover:text-blue-800 underline"
+                      >
+                        Test Auth
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
             )}
 

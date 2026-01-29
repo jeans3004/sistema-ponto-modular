@@ -5,7 +5,6 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { useState, useEffect } from 'react'
 import { getGreeting } from '@/lib/utils'
-import DevelopmentModal from '@/components/ui/DevelopmentModal'
 import NivelSelector from '@/components/ui/NivelSelector'
 import { useUsuario } from '@/hooks/useUsuario'
 import { 
@@ -26,16 +25,16 @@ export default function Header() {
   const { data: session } = useSession()
   const pathname = usePathname()
   const { usuario } = useUsuario()
-  const [currentTime, setCurrentTime] = useState(new Date())
+  const [currentTime, setCurrentTime] = useState<Date | null>(null)
   const [isMenuOpen, setIsMenuOpen] = useState(false)
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false)
-  
-  // Estados para os modais
-  const [showAccountModal, setShowAccountModal] = useState(false)
-  const [showSettingsModal, setShowSettingsModal] = useState(false)
 
-  // Atualizar relógio
+  // Atualizar relógio - só no cliente para evitar hidratação
   useEffect(() => {
+    // Definir hora inicial no cliente
+    setCurrentTime(new Date())
+    
+    // Atualizar a cada segundo
     const timer = setInterval(() => {
       setCurrentTime(new Date())
     }, 1000)
@@ -81,21 +80,7 @@ export default function Header() {
   const navigation = [
     { name: 'Dashboard', href: getDashboardUrl(), icon: FaHome, description: 'Painel principal' },
     { name: 'Histórico', href: '/historico', icon: FaHistory, description: 'Registros anteriores' },
-    { name: 'Relatórios', href: '/relatorios', icon: FaChartLine, description: 'Análises detalhadas' },
   ]
-
-
-  // Função para lidar com clique em "Minha Conta"
-  const handleAccountClick = () => {
-    setIsUserMenuOpen(false)
-    setShowAccountModal(true)
-  }
-
-  // Função para lidar com clique em "Configurações"
-  const handleSettingsClick = () => {
-    setIsUserMenuOpen(false)
-    setShowSettingsModal(true)
-  }
 
   return (
     <>
@@ -149,10 +134,10 @@ export default function Header() {
               {/* Relógio */}
               <div className="hidden md:block text-right bg-gray-50 rounded-xl px-4 py-2">
                 <div className="text-lg font-bold text-gray-900">
-                  {formatTime(currentTime)}
+                  {currentTime ? formatTime(currentTime) : '--:--:--'}
                 </div>
                 <div className="text-gray-600 text-sm">
-                  {formatDate(currentTime)}
+                  {currentTime ? formatDate(currentTime) : '--'}
                 </div>
               </div>
 
@@ -200,20 +185,20 @@ export default function Header() {
                       <div className="px-4 py-2 text-xs text-gray-500 uppercase tracking-wide font-semibold">
                         Perfil
                       </div>
-                      <button 
-                        onClick={handleAccountClick}
+                      <Link 
+                        href="/minha-conta"
                         className="w-full flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-blue-50 transition-colors"
                       >
                         <FaUser className="mr-3 text-blue-600" />
                         Minha Conta
-                      </button>
-                      <button 
-                        onClick={handleSettingsClick}
+                      </Link>
+                      <Link 
+                        href="/configuracoes"
                         className="w-full flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-blue-50 transition-colors"
                       >
                         <FaShieldAlt className="mr-3 text-green-600" />
                         Configurações
-                      </button>
+                      </Link>
                     </div>
                     
                     <div className="border-t border-gray-200 py-2">
@@ -281,21 +266,6 @@ export default function Header() {
           />
         )}
       </header>
-
-      {/* Modais de Desenvolvimento */}
-      <DevelopmentModal
-        isOpen={showAccountModal}
-        onClose={() => setShowAccountModal(false)}
-        featureName="Minha Conta"
-        description="Página de perfil do usuário onde você poderá editar informações pessoais, alterar foto de perfil e gerenciar dados da conta."
-      />
-
-      <DevelopmentModal
-        isOpen={showSettingsModal}
-        onClose={() => setShowSettingsModal(false)}
-        featureName="Configurações"
-        description="Painel de configurações para personalizar preferências do sistema, notificações, horários de trabalho e outras opções avançadas."
-      />
     </>
   )
 }

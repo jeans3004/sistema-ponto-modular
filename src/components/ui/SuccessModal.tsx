@@ -8,13 +8,15 @@ import {
   FaUtensils, 
   FaTimes,
   FaMapMarkerAlt,
-  FaClock
+  FaClock,
+  FaGraduationCap,
+  FaPause
 } from 'react-icons/fa'
 
 interface SuccessModalProps {
   isOpen: boolean
   onClose: () => void
-  type: 'entrada' | 'saida' | 'inicio-almoco' | 'fim-almoco'
+  type: 'entrada' | 'saida' | 'inicio-almoco' | 'fim-almoco' | 'inicio-htp' | 'fim-htp'
   time: string
   distance?: number
   message?: string
@@ -73,6 +75,22 @@ export default function SuccessModal({
           subtitle: 'Bem-vindo de volta! Continuemos o trabalho.',
           color: 'blue',
           bgGradient: 'from-blue-500 to-indigo-600'
+        }
+      case 'inicio-htp':
+        return {
+          icon: FaGraduationCap,
+          title: 'Início do HTP!',
+          subtitle: 'Hora do Trabalho Pedagógico iniciada com sucesso.',
+          color: 'purple',
+          bgGradient: 'from-purple-500 to-violet-600'
+        }
+      case 'fim-htp':
+        return {
+          icon: FaPause,
+          title: 'Fim do HTP!',
+          subtitle: 'Hora do Trabalho Pedagógico finalizada.',
+          color: 'indigo',
+          bgGradient: 'from-indigo-500 to-blue-600'
         }
       default:
         return {

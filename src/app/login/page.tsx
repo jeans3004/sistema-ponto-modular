@@ -33,26 +33,8 @@ export default function LoginPage() {
   }, [router])
 
   const handleGoogleLogin = async () => {
-    try {
-      setIsLoading(true)
-      
-      const result = await signIn('google', {
-        callbackUrl: '/dashboard',
-        redirect: false,
-      })
-
-      if (result?.error) {
-        console.error('Erro no login:', result.error)
-        alert('Erro ao fazer login. Tente novamente.')
-      } else if (result?.url) {
-        router.push(result.url)
-      }
-    } catch (error) {
-      console.error('Erro no login:', error)
-      alert('Erro ao fazer login. Tente novamente.')
-    } finally {
-      setIsLoading(false)
-    }
+    setIsLoading(true)
+    await signIn('google', { callbackUrl: '/dashboard' })
   }
 
   if (isCheckingSession) {
@@ -223,7 +205,7 @@ export default function LoginPage() {
           <div className="flex flex-col md:flex-row justify-between items-center text-center md:text-left">
             <div className="mb-4 md:mb-0">
               <p className="text-blue-200 text-sm">
-                © 2025 Centro de Educação Integral Christ Master
+                © 2025 Desenvolvido por Jean Machado
               </p>
               <p className="text-blue-300 text-xs">
                 Sistema de Controle de Pontos - Acesso Seguro
