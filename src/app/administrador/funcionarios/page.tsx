@@ -6,14 +6,14 @@ import { useRouter } from 'next/navigation'
 import Header from '@/components/dashboard/Header'
 import { useUsuario } from '@/hooks/useUsuario'
 import { Usuario, Coordenacao, TipoColaborador } from '@/types/usuario'
-import { 
-  FaUsers, 
-  FaSpinner, 
-  FaEdit, 
-  FaBuilding, 
-  FaUser, 
-  FaCheck, 
-  FaTimes, 
+import {
+  FaUsers,
+  FaSpinner,
+  FaEdit,
+  FaBuilding,
+  FaUser,
+  FaCheck,
+  FaTimes,
   FaFilter,
   FaSearch,
   FaChevronDown,
@@ -23,7 +23,10 @@ import {
   FaExclamationTriangle,
   FaHome,
   FaGraduationCap,
-  FaBriefcase
+  FaBriefcase,
+  FaUserCheck,
+  FaUserTimes,
+  FaTrash
 } from 'react-icons/fa'
 
 export default function GestaoFuncionarios() {
@@ -155,6 +158,97 @@ export default function GestaoFuncionarios() {
     } catch (error) {
       console.error('Erro na ação:', error)
       alert('Erro na operação')
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
+
+  const handleAprovarUsuario = async (user: Usuario) => {
+    if (!confirm(`Deseja aprovar o acesso de ${user.nome} (${user.email})?`)) return
+
+    setIsSubmitting(true)
+    try {
+      const response = await fetch('/api/admin/usuarios', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          acao: 'aprovar',
+          emailUsuario: user.email,
+          niveisHierarquicos: ['colaborador']
+        })
+      })
+
+      const data = await response.json()
+
+      if (data.success) {
+        alert(`Usuário ${user.nome} aprovado com sucesso!`)
+        await loadData()
+      } else {
+        alert(data.error || 'Erro ao aprovar usuário')
+      }
+    } catch (error) {
+      console.error('Erro ao aprovar usuário:', error)
+      alert('Erro ao aprovar usuário')
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
+
+  const handleRejeitarUsuario = async (user: Usuario) => {
+    if (!confirm(`Deseja rejeitar o acesso de ${user.nome} (${user.email})?`)) return
+
+    setIsSubmitting(true)
+    try {
+      const response = await fetch('/api/admin/usuarios', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          acao: 'rejeitar',
+          emailUsuario: user.email
+        })
+      })
+
+      const data = await response.json()
+
+      if (data.success) {
+        alert(`Usuário ${user.nome} rejeitado.`)
+        await loadData()
+      } else {
+        alert(data.error || 'Erro ao rejeitar usuário')
+      }
+    } catch (error) {
+      console.error('Erro ao rejeitar usuário:', error)
+      alert('Erro ao rejeitar usuário')
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
+
+  const handleExcluirUsuario = async (user: Usuario) => {
+    if (!confirm(`Deseja EXCLUIR permanentemente o usuário ${user.nome} (${user.email})? Esta ação não pode ser desfeita.`)) return
+
+    setIsSubmitting(true)
+    try {
+      const response = await fetch('/api/admin/usuarios', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          acao: 'excluir',
+          emailUsuario: user.email
+        })
+      })
+
+      const data = await response.json()
+
+      if (data.success) {
+        alert(`Usuário ${user.nome} excluído com sucesso!`)
+        await loadData()
+      } else {
+        alert(data.error || 'Erro ao excluir usuário')
+      }
+    } catch (error) {
+      console.error('Erro ao excluir usuário:', error)
+      alert('Erro ao excluir usuário')
     } finally {
       setIsSubmitting(false)
     }
@@ -442,7 +536,7 @@ export default function GestaoFuncionarios() {
                       </td>
                       
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusColor(user.status)}`}>
+                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium capitalize ${getStatusColor(user.status)}`}>
                           {user.status}
                         </span>
                       </td>
@@ -503,20 +597,68 @@ export default function GestaoFuncionarios() {
                       
                       {isAdmin && (
                         <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                          <div className="flex space-x-2">
+                          <div className="flex flex-wrap gap-1">
+                            {user.status === 'pendente' && (
+                              <>
+                                <button
+                                  onClick={() => handleAprovarUsuario(user)}
+                                  disabled={isSubmitting}
+                                  className="inline-flex items-center px-2 py-1 border border-green-300 text-green-700 rounded text-xs hover:bg-green-50 transition-colors disabled:opacity-50"
+                                  title="Aprovar usuário"
+                                >
+                                  <FaUserCheck className="mr-1" />
+                                  Aprovar
+                                </button>
+                                <button
+                                  onClick={() => handleRejeitarUsuario(user)}
+                                  disabled={isSubmitting}
+                                  className="inline-flex items-center px-2 py-1 border border-red-300 text-red-700 rounded text-xs hover:bg-red-50 transition-colors disabled:opacity-50"
+                                  title="Rejeitar usuário"
+                                >
+                                  <FaUserTimes className="mr-1" />
+                                  Rejeitar
+                                </button>
+                              </>
+                            )}
+                            {user.status === 'ativo' && (
+                              <>
+                                <button
+                                  onClick={() => handleUserAction(user, 'coordenacao')}
+                                  className="inline-flex items-center px-2 py-1 border border-blue-300 text-blue-700 rounded text-xs hover:bg-blue-50 transition-colors"
+                                  title="Gerenciar Coordenação"
+                                >
+                                  <FaBuilding className="mr-1" />
+                                  Coord.
+                                </button>
+                                <button
+                                  onClick={() => handleUserAction(user, 'tipo')}
+                                  className="inline-flex items-center px-2 py-1 border border-green-300 text-green-700 rounded text-xs hover:bg-green-50 transition-colors"
+                                  title="Definir Tipo"
+                                >
+                                  <FaUserTag className="mr-1" />
+                                  Tipo
+                                </button>
+                              </>
+                            )}
+                            {user.status === 'inativo' && (
+                              <button
+                                onClick={() => handleAprovarUsuario(user)}
+                                disabled={isSubmitting}
+                                className="inline-flex items-center px-2 py-1 border border-green-300 text-green-700 rounded text-xs hover:bg-green-50 transition-colors disabled:opacity-50"
+                                title="Reativar usuário"
+                              >
+                                <FaUserCheck className="mr-1" />
+                                Reativar
+                              </button>
+                            )}
                             <button
-                              onClick={() => handleUserAction(user, 'coordenacao')}
-                              className="text-blue-600 hover:text-blue-900 transition-colors"
-                              title="Gerenciar Coordenação"
+                              onClick={() => handleExcluirUsuario(user)}
+                              disabled={isSubmitting}
+                              className="inline-flex items-center px-2 py-1 border border-red-300 text-red-700 rounded text-xs hover:bg-red-50 transition-colors disabled:opacity-50"
+                              title="Excluir usuário"
                             >
-                              <FaBuilding />
-                            </button>
-                            <button
-                              onClick={() => handleUserAction(user, 'tipo')}
-                              className="text-green-600 hover:text-green-900 transition-colors"
-                              title="Definir Tipo"
-                            >
-                              <FaUserTag />
+                              <FaTrash className="mr-1" />
+                              Excluir
                             </button>
                           </div>
                         </td>

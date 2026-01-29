@@ -237,6 +237,23 @@ export function temNivel(usuario: Usuario | null, nivel: NivelHierarquico): bool
   return usuario.niveisHierarquicos.includes(nivel)
 }
 
+// Função para excluir usuário do sistema (Admin)
+export async function excluirUsuario(emailUsuario: string): Promise<void> {
+  try {
+    const usuarioRef = adminDb.collection(COLLECTION_USUARIOS).doc(emailUsuario)
+    const usuarioDoc = await usuarioRef.get()
+
+    if (!usuarioDoc.exists) {
+      throw new Error('Usuário não encontrado')
+    }
+
+    await usuarioRef.delete()
+  } catch (error) {
+    console.error('Erro ao excluir usuário:', error)
+    throw error
+  }
+}
+
 // Função para obter funcionários (para coordenadores)
 export async function obterFuncionarios(): Promise<Usuario[]> {
   try {

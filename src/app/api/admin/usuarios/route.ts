@@ -1,11 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { verificarAdmin, criarRespostaErro } from '@/lib/authMiddleware'
-import { 
-  listarUsuarios, 
-  listarUsuariosPendentes, 
-  aprovarUsuario, 
+import {
+  listarUsuarios,
+  listarUsuariosPendentes,
+  aprovarUsuario,
   rejeitarUsuario,
-  alterarNiveisUsuario 
+  alterarNiveisUsuario,
+  excluirUsuario
 } from '@/lib/firebaseUsers'
 import { NivelHierarquico } from '@/types/usuario'
 
@@ -128,9 +129,17 @@ export async function POST(req: NextRequest) {
           novosNiveis: niveisHierarquicos
         })
 
+      case 'excluir':
+        await excluirUsuario(emailUsuario)
+
+        return NextResponse.json({
+          success: true,
+          message: 'Usuário excluído com sucesso'
+        })
+
       default:
         return NextResponse.json({
-          error: 'Ação inválida. Ações permitidas: aprovar, rejeitar, alterar-niveis',
+          error: 'Ação inválida. Ações permitidas: aprovar, rejeitar, alterar-niveis, excluir',
           code: 'INVALID_ACTION'
         }, { status: 400 })
     }
