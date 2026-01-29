@@ -1,12 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
+import { authOptions } from '@/lib/auth'
 import { criarOuAtualizarUsuario } from '@/lib/firebaseUsers'
 
 // POST - Sincronizar usuário no primeiro login
 export async function POST(req: NextRequest) {
   try {
     // Verificar se o usuário está autenticado no NextAuth
-    const session = await getServerSession()
+    const session = await getServerSession(authOptions)
     
     if (!session?.user?.email || !session?.user?.name) {
       return NextResponse.json({

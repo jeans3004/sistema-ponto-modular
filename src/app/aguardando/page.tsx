@@ -18,6 +18,13 @@ export default function AguardandoAprovacao() {
     }
   }, [status, router])
 
+  // Se autenticado mas sem usuario no banco, tentar sincronizar para criar o registro
+  useEffect(() => {
+    if (status === 'authenticated' && !isLoading && !usuario) {
+      sincronizar()
+    }
+  }, [status, isLoading, usuario])
+
   // Redirecionar para dashboard se já está ativo
   useEffect(() => {
     if (!isLoading && isAtivo) {

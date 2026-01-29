@@ -90,7 +90,17 @@ export default function Dashboard() {
 
   // Roteamento baseado em nível hierárquico
   useEffect(() => {
-    if (!isLoadingUser && usuario) {
+    if (isLoadingUser) return
+
+    // Se autenticado mas sem dados de usuário no banco, redirecionar para aguardando
+    // Isso acontece quando o usuário é novo e o sync acabou de criá-lo como pendente,
+    // ou quando houve erro na sincronização
+    if (!usuario && status === 'authenticated') {
+      router.push('/aguardando')
+      return
+    }
+
+    if (usuario) {
       // Redirecionar pendentes/inativos para página de aguardo
       if (usuario.status === 'pendente' || usuario.status === 'inativo') {
         router.push('/aguardando')
@@ -115,7 +125,7 @@ export default function Dashboard() {
           break
       }
     }
-  }, [usuario, isLoadingUser, router])
+  }, [usuario, isLoadingUser, status, router])
 
   // Atualizar relógio - mantém a funcionalidade existente
   useEffect(() => {
