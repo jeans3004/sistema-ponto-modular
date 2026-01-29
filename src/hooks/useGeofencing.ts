@@ -7,7 +7,7 @@ import { SYSTEM_CONFIG } from '@/lib/config'
 const GEOFENCE_NOTIFIED_KEY = 'geofence_last_notified_date'
 
 function getTodayDateString(): string {
-  return new Date().toISOString().split('T')[0]
+  return new Date().toLocaleDateString('en-CA', { timeZone: SYSTEM_CONFIG.TIMEZONE })
 }
 
 function wasNotifiedToday(): boolean {

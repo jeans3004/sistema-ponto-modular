@@ -22,6 +22,9 @@ export const SYSTEM_CONFIG = {
     MAX_HOURS_PER_DAY: 12,
   },
 
+  // Fuso horário do local de trabalho
+  TIMEZONE: process.env.NEXT_PUBLIC_TIMEZONE || 'America/Manaus',
+
   // Configurações de geolocalização
   GEOLOCATION: {
     ENABLED: process.env.NEXT_PUBLIC_GEOLOCATION_ENABLED === 'true' || false,

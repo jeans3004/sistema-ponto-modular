@@ -64,8 +64,11 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    const agora = new Date()
-    const horaEntrada = agora.toTimeString().slice(0, 5) // HH:MM
+    const horaEntrada = new Date().toLocaleTimeString('pt-BR', {
+      hour: '2-digit',
+      minute: '2-digit',
+      timeZone: SYSTEM_CONFIG.TIMEZONE
+    })
 
     // Registrar entrada no Firebase (com coordenadas se disponíveis)
     const resultado = await registrarEntrada(

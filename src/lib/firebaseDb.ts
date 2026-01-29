@@ -57,7 +57,7 @@ export async function getPontosFuncionario(funcionarioEmail: string): Promise<Re
 // Função para registrar entrada
 export async function registrarEntrada(funcionarioEmail: string, horaEntrada: string, locationData?: LocationData) {
   try {
-    const hoje = new Date().toISOString().split('T')[0] // YYYY-MM-DD
+    const hoje = new Date().toLocaleDateString('en-CA', { timeZone: SYSTEM_CONFIG.TIMEZONE }) // YYYY-MM-DD
     
     // Verificar se já existe registro para hoje
     const pontosExistentes = await getPontosFuncionario(funcionarioEmail)
@@ -97,7 +97,7 @@ export async function registrarEntrada(funcionarioEmail: string, horaEntrada: st
 // Função para registrar saída
 export async function registrarSaida(funcionarioEmail: string, horaSaida: string, locationData?: LocationData) {
   try {
-    const hoje = new Date().toISOString().split('T')[0]
+    const hoje = new Date().toLocaleDateString('en-CA', { timeZone: SYSTEM_CONFIG.TIMEZONE })
     
     // Buscar registros de hoje do funcionário
     const snapshot = await adminDb
@@ -156,7 +156,7 @@ export async function registrarSaida(funcionarioEmail: string, horaSaida: string
 // Função para registrar início do almoço
 export async function registrarInicioAlmoco(funcionarioEmail: string, horaInicioAlmoco: string, locationData?: LocationData) {
   try {
-    const hoje = new Date().toISOString().split('T')[0]
+    const hoje = new Date().toLocaleDateString('en-CA', { timeZone: SYSTEM_CONFIG.TIMEZONE })
     
     // Buscar registros de hoje do funcionário
     const snapshot = await adminDb
@@ -191,7 +191,7 @@ export async function registrarInicioAlmoco(funcionarioEmail: string, horaInicio
 // Função para registrar fim do almoço
 export async function registrarFimAlmoco(funcionarioEmail: string, horaFimAlmoco: string, locationData?: LocationData) {
   try {
-    const hoje = new Date().toISOString().split('T')[0]
+    const hoje = new Date().toLocaleDateString('en-CA', { timeZone: SYSTEM_CONFIG.TIMEZONE })
     
     // Buscar registros de hoje do funcionário
     const snapshot = await adminDb
@@ -296,7 +296,7 @@ export async function getAusenciasJustificadas(funcionarioEmail: string): Promis
 // Função para registrar início de HTP
 export async function registrarInicioHtp(funcionarioEmail: string, horaInicioHtp: string, locationData?: LocationData) {
   try {
-    const hoje = new Date().toISOString().split('T')[0]
+    const hoje = new Date().toLocaleDateString('en-CA', { timeZone: SYSTEM_CONFIG.TIMEZONE })
     
     // Buscar registros de hoje do funcionário
     const snapshot = await adminDb
@@ -368,7 +368,7 @@ export async function registrarInicioHtp(funcionarioEmail: string, horaInicioHtp
 // Função para registrar fim de HTP
 export async function registrarFimHtp(funcionarioEmail: string, horaFimHtp: string, locationData?: LocationData) {
   try {
-    const hoje = new Date().toISOString().split('T')[0]
+    const hoje = new Date().toLocaleDateString('en-CA', { timeZone: SYSTEM_CONFIG.TIMEZONE })
     
     // Buscar registros de hoje do funcionário
     const snapshot = await adminDb

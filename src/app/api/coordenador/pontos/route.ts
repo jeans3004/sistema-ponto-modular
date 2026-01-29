@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { verificarAutenticacao } from '@/lib/authMiddleware'
 import { adminDb } from '@/lib/firebaseAdmin'
 import { getCoordenacoesDoCoordenador } from '@/lib/firebaseDb'
+import { SYSTEM_CONFIG } from '@/lib/config'
 
 // GET - Obter pontos de todos os funcionários para coordenadores
 export async function GET(req: NextRequest) {
@@ -28,7 +29,7 @@ export async function GET(req: NextRequest) {
     const data = url.searchParams.get('data')
     
     // Se não especificar data, usar hoje
-    const targetDate = data || new Date().toISOString().split('T')[0]
+    const targetDate = data || new Date().toLocaleDateString('en-CA', { timeZone: SYSTEM_CONFIG.TIMEZONE })
 
     // Buscar coordenação do coordenador atual se não for admin
     const isAdmin = usuario.niveisHierarquicos?.includes('administrador')

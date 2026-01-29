@@ -63,8 +63,11 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    const agora = new Date()
-    const horaInicioAlmoco = agora.toTimeString().slice(0, 5) // HH:MM
+    const horaInicioAlmoco = new Date().toLocaleTimeString('pt-BR', {
+      hour: '2-digit',
+      minute: '2-digit',
+      timeZone: SYSTEM_CONFIG.TIMEZONE
+    })
 
     // Registrar início do almoço no Firebase
     await registrarInicioAlmoco(usuario.email, horaInicioAlmoco, locationData)

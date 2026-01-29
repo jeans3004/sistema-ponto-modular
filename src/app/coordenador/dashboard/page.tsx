@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { useState, useEffect } from 'react'
 import Header from '@/components/dashboard/Header'
 import { formatDate } from '@/lib/utils'
+import { SYSTEM_CONFIG } from '@/lib/config'
 import { useUsuario } from '@/hooks/useUsuario'
 import { 
   FaUsers, 
@@ -139,7 +140,7 @@ export default function CoordenadorDashboard() {
       }
       
       // Carregar pontos de hoje de todos os funcionários
-      const hoje = new Date().toISOString().split('T')[0]
+      const hoje = new Date().toLocaleDateString('en-CA', { timeZone: SYSTEM_CONFIG.TIMEZONE })
       const pontosResponse = await fetch(`/api/coordenador/pontos?data=${hoje}`)
       const pontosData = await pontosResponse.json()
       

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { verificarAutenticacao } from '@/lib/authMiddleware'
 import { registrarInicioHtp } from '@/lib/firebaseDb'
+import { SYSTEM_CONFIG } from '@/lib/config'
 
 export async function POST(req: NextRequest) {
   try {
@@ -45,7 +46,7 @@ export async function POST(req: NextRequest) {
       const horaAtual = new Date().toLocaleTimeString('pt-BR', {
         hour: '2-digit',
         minute: '2-digit',
-        timeZone: 'America/Sao_Paulo'
+        timeZone: SYSTEM_CONFIG.TIMEZONE
       })
 
       const resultado = await registrarInicioHtp(

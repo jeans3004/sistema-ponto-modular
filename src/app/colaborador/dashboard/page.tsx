@@ -146,7 +146,7 @@ export default function ColaboradorDashboard() {
       const data = await response.json()
       
       if (data.pontos) {
-        const hoje = new Date().toISOString().split('T')[0]
+        const hoje = new Date().toLocaleDateString('en-CA', { timeZone: SYSTEM_CONFIG.TIMEZONE })
         const registroHoje = data.pontos.find((p: TimeRecord) => p.data === hoje)
         
         if (registroHoje) {
