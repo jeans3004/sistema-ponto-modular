@@ -55,14 +55,19 @@ export default function GerenciamentoCoordenacoes() {
   const [showCriarModal, setShowCriarModal] = useState(false)
   const [showEditarModal, setShowEditarModal] = useState(false)
   const [showAtribuirModal, setShowAtribuirModal] = useState(false)
+  const [showAtribuirLoteModal, setShowAtribuirLoteModal] = useState(false)
   const [selectedCoordenacao, setSelectedCoordenacao] = useState<Coordenacao | null>(null)
-  
+
   // Estados para formulários
   const [formData, setFormData] = useState({
     nome: '',
     descricao: ''
   })
   const [selectedCoordenador, setSelectedCoordenador] = useState('')
+
+  // Estados para atribuição em lote
+  const [selectedCoordenadorLote, setSelectedCoordenadorLote] = useState('')
+  const [coordenacoesSelecionadas, setCoordenacoesSelecionadas] = useState<Set<string>>(new Set())
 
   useEffect(() => {
     if (!isLoadingUser && usuario && !usuario.niveisHierarquicos.includes('administrador')) {
@@ -319,6 +324,106 @@ export default function GerenciamentoCoordenacoes() {
     }
   }
 
+  const handleSelectCoordenadorLote = (email: string) => {
+    setSelectedCoordenadorLote(email)
+    if (!email) {
+      setCoordenacoesSelecionadas(new Set())
+      return
+    }
+    const preSelected = new Set<string>()
+    coordenacoes.forEach((c) => {
+      if (c.ativo && c.coordenadorEmail === email) {
+        preSelected.add(c.id)
+      }
+    })
+    setCoordenacoesSelecionadas(preSelected)
+  }
+
+  const toggleCoordenacaoLote = (id: string) => {
+    setCoordenacoesSelecionadas((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) {
+        next.delete(id)
+      } else {
+        next.add(id)
+      }
+      return next
+    })
+  }
+
+  const handleAtribuirLote = async () => {
+    if (!selectedCoordenadorLote) return
+
+    const coordenador = coordenadores.find(c => c.email === selectedCoordenadorLote)
+    if (!coordenador) return
+
+    setIsSubmitting(true)
+
+    try {
+      const coordenacoesAtivas = coordenacoes.filter(c => c.ativo)
+      const promises: Promise<Response>[] = []
+
+      for (const coord of coordenacoesAtivas) {
+        const estaSelecionada = coordenacoesSelecionadas.has(coord.id)
+        const jaAtribuida = coord.coordenadorEmail === selectedCoordenadorLote
+
+        if (estaSelecionada && !jaAtribuida) {
+          // Atribuir coordenador
+          promises.push(
+            fetch('/api/admin/coordenacoes', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                acao: 'atribuir-coordenador',
+                coordenacaoId: coord.id,
+                coordenadorEmail: coordenador.email,
+                coordenadorNome: coordenador.nome
+              })
+            })
+          )
+        } else if (!estaSelecionada && jaAtribuida) {
+          // Remover coordenador
+          promises.push(
+            fetch('/api/admin/coordenacoes', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                acao: 'remover-coordenador',
+                coordenacaoId: coord.id
+              })
+            })
+          )
+        }
+      }
+
+      if (promises.length === 0) {
+        alert('Nenhuma alteração detectada.')
+        setIsSubmitting(false)
+        return
+      }
+
+      const results = await Promise.all(promises)
+      const allData = await Promise.all(results.map(r => r.json()))
+      const erros = allData.filter(d => !d.success)
+
+      if (erros.length > 0) {
+        alert(`Concluído com ${erros.length} erro(s). Verifique os dados.`)
+      } else {
+        alert('Coordenações atualizadas com sucesso!')
+      }
+
+      setShowAtribuirLoteModal(false)
+      setSelectedCoordenadorLote('')
+      setCoordenacoesSelecionadas(new Set())
+      await loadData()
+    } catch (error) {
+      console.error('Erro ao atribuir em lote:', error)
+      alert('Erro ao atribuir coordenações em lote')
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
+
   const openEditarModal = (coordenacao: Coordenacao) => {
     setSelectedCoordenacao(coordenacao)
     setFormData({
@@ -377,13 +482,26 @@ export default function GerenciamentoCoordenacoes() {
                   Gerencie coordenações e atribua coordenadores
                 </p>
               </div>
-              <button
-                onClick={() => setShowCriarModal(true)}
-                className="flex items-center space-x-2 bg-white/20 hover:bg-white/30 text-white px-6 py-3 rounded-xl transition-all duration-200 border border-white/30"
-              >
-                <FaPlus />
-                <span>Nova Coordenação</span>
-              </button>
+              <div className="flex flex-col sm:flex-row gap-3">
+                <button
+                  onClick={() => {
+                    setSelectedCoordenadorLote('')
+                    setCoordenacoesSelecionadas(new Set())
+                    setShowAtribuirLoteModal(true)
+                  }}
+                  className="flex items-center space-x-2 bg-purple-600/80 hover:bg-purple-600 text-white px-6 py-3 rounded-xl transition-all duration-200 border border-purple-400/30"
+                >
+                  <FaUserPlus />
+                  <span>Atribuir Coordenações</span>
+                </button>
+                <button
+                  onClick={() => setShowCriarModal(true)}
+                  className="flex items-center space-x-2 bg-white/20 hover:bg-white/30 text-white px-6 py-3 rounded-xl transition-all duration-200 border border-white/30"
+                >
+                  <FaPlus />
+                  <span>Nova Coordenação</span>
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -774,6 +892,120 @@ export default function GerenciamentoCoordenacoes() {
                     <>
                       <FaCheck />
                       <span>Confirmar</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Atribuir Coordenações em Lote */}
+      {showAtribuirLoteModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl p-8 max-w-lg w-full mx-4 shadow-2xl max-h-[90vh] flex flex-col">
+            <div className="text-center mb-6">
+              <div className="w-16 h-16 bg-purple-600 rounded-full flex items-center justify-center mx-auto mb-4">
+                <FaUserPlus className="text-white text-2xl" />
+              </div>
+              <h2 className="text-2xl font-bold text-gray-900 mb-2">Atribuir Coordenações em Lote</h2>
+              <p className="text-gray-600">Selecione um coordenador e marque as coordenações desejadas</p>
+            </div>
+
+            <div className="space-y-4 flex-1 overflow-hidden flex flex-col">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Selecione o Coordenador
+                </label>
+                <select
+                  value={selectedCoordenadorLote}
+                  onChange={(e) => handleSelectCoordenadorLote(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent text-gray-900 bg-white"
+                >
+                  <option value="">Selecione um coordenador</option>
+                  {coordenadores.map((coordenador) => (
+                    <option key={coordenador.email} value={coordenador.email}>
+                      {coordenador.nome} ({coordenador.email})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {selectedCoordenadorLote && (
+                <div className="flex-1 overflow-hidden flex flex-col">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Coordenações Ativas
+                  </label>
+                  <div className="flex-1 overflow-y-auto border border-gray-200 rounded-lg divide-y divide-gray-100">
+                    {coordenacoes.filter(c => c.ativo).length === 0 ? (
+                      <p className="text-sm text-gray-500 italic p-4 text-center">Nenhuma coordenação ativa encontrada.</p>
+                    ) : (
+                      coordenacoes.filter(c => c.ativo).map((coord) => {
+                        const isChecked = coordenacoesSelecionadas.has(coord.id)
+                        const temOutroCoordenador = coord.coordenadorEmail && coord.coordenadorEmail !== selectedCoordenadorLote
+                        return (
+                          <label
+                            key={coord.id}
+                            className={`flex items-start gap-3 p-3 cursor-pointer hover:bg-purple-50 transition-colors ${isChecked ? 'bg-purple-50/50' : ''}`}
+                          >
+                            <input
+                              type="checkbox"
+                              checked={isChecked}
+                              onChange={() => toggleCoordenacaoLote(coord.id)}
+                              className="mt-1 h-4 w-4 text-purple-600 border-gray-300 rounded focus:ring-purple-500"
+                            />
+                            <div className="flex-1 min-w-0">
+                              <div className="text-sm font-medium text-gray-900">{coord.nome}</div>
+                              {coord.descricao && (
+                                <div className="text-xs text-gray-500 truncate">{coord.descricao}</div>
+                              )}
+                              {temOutroCoordenador && (
+                                <div className="text-xs text-orange-600 mt-1">
+                                  (Atualmente: {coord.coordenadorNome})
+                                </div>
+                              )}
+                              {coord.coordenadorEmail === selectedCoordenadorLote && (
+                                <div className="text-xs text-green-600 mt-1">
+                                  (Já atribuído a este coordenador)
+                                </div>
+                              )}
+                            </div>
+                          </label>
+                        )
+                      })
+                    )}
+                  </div>
+                </div>
+              )}
+
+              <div className="flex space-x-3 pt-4">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowAtribuirLoteModal(false)
+                    setSelectedCoordenadorLote('')
+                    setCoordenacoesSelecionadas(new Set())
+                  }}
+                  disabled={isSubmitting}
+                  className="flex-1 bg-gray-200 hover:bg-gray-300 text-gray-700 font-semibold py-3 px-6 rounded-xl transition-colors duration-200"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={handleAtribuirLote}
+                  disabled={isSubmitting || !selectedCoordenadorLote}
+                  className="flex-1 bg-purple-600 hover:bg-purple-700 text-white font-semibold py-3 px-6 rounded-xl transition-colors duration-200 flex items-center justify-center space-x-2 disabled:opacity-50"
+                >
+                  {isSubmitting ? (
+                    <>
+                      <FaSpinner className="animate-spin" />
+                      <span>Salvando...</span>
+                    </>
+                  ) : (
+                    <>
+                      <FaCheck />
+                      <span>Salvar</span>
                     </>
                   )}
                 </button>
