@@ -141,7 +141,8 @@ export default function Header() {
                 </div>
               </div>
 
-              {/* Seletor de Nível Hierárquico */}
+              {/* Seletor de Nível Hierárquico - sempre visível */}
+              <NivelSelector compact className="sm:hidden" />
               <div className="hidden sm:block">
                 <NivelSelector />
               </div>
