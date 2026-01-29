@@ -62,3 +62,47 @@ body {
 .animate-bounce {
   animation: bounce 1s infinite;
 }
+
+/* Animação para banner de instalação PWA */
+@keyframes slideUp {
+  from {
+    transform: translateY(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+.animate-slideUp {
+  animation: slideUp 0.3s ease-out;
+}
+
+/* iOS Safe Areas */
+@supports (padding: max(0px)) {
+  .safe-area-inset-bottom {
+    padding-bottom: max(1rem, env(safe-area-inset-bottom));
+  }
+
+  .safe-area-inset-top {
+    padding-top: max(0px, env(safe-area-inset-top));
+  }
+}
+
+/* Remover highlight de tap em mobile */
+* {
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Prevenir overscroll bounce no iOS */
+html {
+  overscroll-behavior: none;
+}
+
+/* Standalone mode adjustments */
+@media all and (display-mode: standalone) {
+  body {
+    padding-top: env(safe-area-inset-top);
+  }
+}
