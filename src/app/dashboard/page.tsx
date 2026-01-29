@@ -91,8 +91,14 @@ export default function Dashboard() {
   // Roteamento baseado em nível hierárquico
   useEffect(() => {
     if (!isLoadingUser && usuario) {
+      // Redirecionar pendentes/inativos para página de aguardo
+      if (usuario.status === 'pendente' || usuario.status === 'inativo') {
+        router.push('/aguardando')
+        return
+      }
+
       const { nivelAtivo } = usuario
-      
+
       // Redirecionar para o dashboard específico do nível ativo
       switch (nivelAtivo) {
         case 'administrador':

@@ -1,18 +1,31 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { getServerSession } from 'next-auth'
+import { authOptions } from '@/lib/auth'
+import { obterUsuario } from '@/lib/firebaseUsers'
 import { verificarAutenticacao, criarRespostaErro } from '@/lib/authMiddleware'
-import { criarOuAtualizarUsuario, trocarNivelAtivo } from '@/lib/firebaseUsers'
+import { trocarNivelAtivo } from '@/lib/firebaseUsers'
 import { NivelHierarquico } from '@/types/usuario'
 
-// GET - Obter dados do usuário atual
+// GET - Obter dados do usuário atual (permite pendentes/inativos)
 export async function GET(req: NextRequest) {
   try {
-    const authResult = await verificarAutenticacao(req)
-    
-    if (!authResult.success) {
-      return criarRespostaErro(authResult)
+    const session = await getServerSession(authOptions)
+
+    if (!session?.user?.email) {
+      return NextResponse.json({
+        error: 'Usuário não autenticado',
+        code: 'AUTH_ERROR'
+      }, { status: 401 })
     }
 
-    const usuario = authResult.usuario!
+    const usuario = await obterUsuario(session.user.email)
+
+    if (!usuario) {
+      return NextResponse.json({
+        error: 'Usuário não encontrado no sistema',
+        code: 'USER_NOT_FOUND'
+      }, { status: 404 })
+    }
 
     return NextResponse.json({
       success: true,

@@ -46,6 +46,7 @@ export const config = {
   matcher: [
     '/login',
     '/dashboard/:path*',
+    '/aguardando',
     '/historico/:path*',
     '/ausencia/:path*',
     '/api/pontos/:path*',
