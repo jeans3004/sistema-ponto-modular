@@ -3,6 +3,7 @@ import { Inter } from 'next/font/google'
 import './globals.css'
 import AuthProvider from '@/components/providers/AuthProvider'
 import { ServiceWorkerProvider } from '@/components/providers/ServiceWorkerProvider'
+import { GeofencingProvider } from '@/components/providers/GeofencingProvider'
 import { InstallPWABanner } from '@/components/ui/InstallPWABanner'
 
 const inter = Inter({ subsets: ['latin'] })
@@ -91,8 +92,10 @@ export default function RootLayout({
       <body className={inter.className}>
         <AuthProvider>
           <ServiceWorkerProvider>
-            {children}
-            <InstallPWABanner />
+            <GeofencingProvider>
+              {children}
+              <InstallPWABanner />
+            </GeofencingProvider>
           </ServiceWorkerProvider>
         </AuthProvider>
       </body>

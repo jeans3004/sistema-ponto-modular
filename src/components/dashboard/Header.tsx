@@ -229,8 +229,8 @@ export default function Header() {
             <div className="lg:hidden absolute top-full left-0 right-0 bg-white border-b border-gray-200 shadow-lg">
               <div className="px-4 py-6 space-y-4">
                 {/* Seletor de Nível Hierárquico no mobile */}
-                <div className="sm:hidden">
-                  <NivelSelector compact />
+                <div>
+                  <NivelSelector />
                 </div>
 
                 {navigation.map((item) => {

@@ -79,6 +79,22 @@ body {
   animation: slideUp 0.3s ease-out;
 }
 
+/* Animação para banner de geofencing */
+@keyframes slideDown {
+  from {
+    transform: translateY(-100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+.animate-slideDown {
+  animation: slideDown 0.3s ease-out;
+}
+
 /* iOS Safe Areas */
 @supports (padding: max(0px)) {
   .safe-area-inset-bottom {
