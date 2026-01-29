@@ -564,18 +564,6 @@ export async function atribuirCoordenador(
   coordenadorNome: string
 ): Promise<{ success: boolean; error?: string }> {
   try {
-    // Verificar se o coordenador já tem uma coordenação atribuída
-    const snapshot = await adminDb
-      .collection(COLLECTIONS.COORDENACOES)
-      .where('coordenadorEmail', '==', coordenadorEmail)
-      .where('ativo', '==', true)
-      .limit(1)
-      .get()
-    
-    if (!snapshot.empty && snapshot.docs[0].id !== coordenacaoId) {
-      return { success: false, error: 'Este coordenador já possui uma coordenação atribuída' }
-    }
-
     await adminDb.collection(COLLECTIONS.COORDENACOES).doc(coordenacaoId).update({
       coordenadorEmail,
       coordenadorNome,
