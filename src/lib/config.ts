@@ -15,6 +15,12 @@ export const SYSTEM_CONFIG = {
     ACCEPTED_FILE_TYPES: ['pdf', 'jpg', 'jpeg', 'png'],
     GOOGLE_DRIVE_FOLDER_URL: process.env.NEXT_PUBLIC_GOOGLE_DRIVE_JUSTIFICATIVAS_FOLDER || '',
   },
+
+  // Configurações do Google Drive (Shared Drive)
+  GOOGLE_DRIVE: {
+    SHARED_DRIVE_ID: process.env.GOOGLE_DRIVE_SHARED_DRIVE_ID || '',
+    AUSENCIAS_FOLDER_ID: process.env.GOOGLE_DRIVE_AUSENCIAS_FOLDER_ID || '',
+  },
   
   // Configurações de jornada
   WORKDAY: {

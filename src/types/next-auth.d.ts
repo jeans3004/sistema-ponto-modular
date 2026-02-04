@@ -7,6 +7,7 @@ declare module "next-auth" {
       uid: string
       isDatabaseAdmin: boolean
     } & DefaultSession["user"]
+    accessToken?: string
   }
 
   interface User extends DefaultUser {
@@ -18,5 +19,8 @@ declare module "next-auth/jwt" {
   interface JWT extends DefaultJWT {
     uid: string
     isDatabaseAdmin: boolean
+    accessToken?: string
+    refreshToken?: string
+    accessTokenExpires?: number
   }
 }
