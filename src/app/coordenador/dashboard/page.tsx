@@ -613,17 +613,27 @@ export default function CoordenadorDashboard() {
               <FaUsers className="mx-auto h-12 w-12 text-gray-400" />
               <h3 className="mt-2 text-sm font-medium text-gray-900">Nenhum funcionário encontrado</h3>
               <p className="mt-1 text-sm text-gray-500">
-                {searchTerm ? 'Tente uma busca diferente.' : 
-                 !usuario?.coordenacaoId && !usuario?.coordenacoes?.length ?
-                 'Você não possui coordenação atribuída.' :
-                 'Nenhum funcionário corresponde aos filtros selecionados.'}
+                {searchTerm ? 'Tente uma busca diferente.' :
+                 coordenacoes.length === 0 ?
+                 'Você não está atribuído como coordenador de nenhuma coordenação.' :
+                 'Nenhum funcionário foi atribuído às suas coordenações ou não corresponde aos filtros.'}
               </p>
-              {!usuario?.coordenacaoId && !usuario?.coordenacoes?.length && (
+              {coordenacoes.length === 0 && (
                 <div className="mt-4 mx-auto max-w-md p-4 bg-yellow-50 rounded-lg border border-yellow-200">
                   <div className="flex items-center">
                     <FaInfoCircle className="text-yellow-600 mr-2 flex-shrink-0" />
                     <span className="text-yellow-800 text-sm">
-                      Entre em contato com o administrador para ter uma coordenação atribuída
+                      Peça ao administrador para atribuí-lo como coordenador de uma coordenação na página de Coordenações.
+                    </span>
+                  </div>
+                </div>
+              )}
+              {coordenacoes.length > 0 && funcionarios.length === 0 && !searchTerm && filterStatus === 'todos' && (
+                <div className="mt-4 mx-auto max-w-md p-4 bg-blue-50 rounded-lg border border-blue-200">
+                  <div className="flex items-center">
+                    <FaInfoCircle className="text-blue-600 mr-2 flex-shrink-0" />
+                    <span className="text-blue-800 text-sm">
+                      Nenhum funcionário foi atribuído às suas coordenações. Peça ao administrador para vincular funcionários.
                     </span>
                   </div>
                 </div>
