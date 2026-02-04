@@ -21,10 +21,17 @@ import {
   FaArrowLeft
 } from 'react-icons/fa'
 
+interface CoordenadorInfo {
+  email: string
+  nome: string
+}
+
 interface Coordenacao {
   id: string
   nome: string
   descricao: string
+  coordenadores?: CoordenadorInfo[]
+  // Campos legados
   coordenadorEmail?: string
   coordenadorNome?: string
   ativo: boolean
@@ -227,23 +234,28 @@ export default function GerenciamentoCoordenacoes() {
     }
   }
 
-  const handleRemoverCoordenador = async (coordenacao: Coordenacao) => {
-    if (!confirm('Deseja realmente remover o coordenador desta coordenação?')) return
-    
+  const handleRemoverCoordenador = async (coordenacao: Coordenacao, coordenadorEmail?: string) => {
+    const mensagem = coordenadorEmail
+      ? `Deseja realmente remover este coordenador da coordenação "${coordenacao.nome}"?`
+      : `Deseja realmente remover TODOS os coordenadores da coordenação "${coordenacao.nome}"?`
+
+    if (!confirm(mensagem)) return
+
     setIsSubmitting(true)
-    
+
     try {
       const response = await fetch('/api/admin/coordenacoes', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          acao: 'remover-coordenador',
-          coordenacaoId: coordenacao.id
+          acao: coordenadorEmail ? 'remover-coordenador-especifico' : 'remover-coordenador',
+          coordenacaoId: coordenacao.id,
+          coordenadorEmail: coordenadorEmail
         })
       })
-      
+
       const data = await response.json()
-      
+
       if (data.success) {
         alert('Coordenador removido com sucesso!')
         await loadData()
@@ -256,6 +268,17 @@ export default function GerenciamentoCoordenacoes() {
     } finally {
       setIsSubmitting(false)
     }
+  }
+
+  // Função auxiliar para obter a lista de coordenadores (novo array ou campo legado)
+  const getCoordenadoresDaCoordenacao = (coordenacao: Coordenacao): CoordenadorInfo[] => {
+    if (coordenacao.coordenadores && coordenacao.coordenadores.length > 0) {
+      return coordenacao.coordenadores
+    }
+    if (coordenacao.coordenadorEmail && coordenacao.coordenadorNome) {
+      return [{ email: coordenacao.coordenadorEmail, nome: coordenacao.coordenadorNome }]
+    }
+    return []
   }
 
   const handleToggleAtivo = async (coordenacao: Coordenacao) => {
@@ -332,8 +355,11 @@ export default function GerenciamentoCoordenacoes() {
     }
     const preSelected = new Set<string>()
     coordenacoes.forEach((c) => {
-      if (c.ativo && c.coordenadorEmail === email) {
-        preSelected.add(c.id)
+      if (c.ativo) {
+        const coordenadoresList = getCoordenadoresDaCoordenacao(c)
+        if (coordenadoresList.some(coord => coord.email === email)) {
+          preSelected.add(c.id)
+        }
       }
     })
     setCoordenacoesSelecionadas(preSelected)
@@ -365,16 +391,17 @@ export default function GerenciamentoCoordenacoes() {
 
       for (const coord of coordenacoesAtivas) {
         const estaSelecionada = coordenacoesSelecionadas.has(coord.id)
-        const jaAtribuida = coord.coordenadorEmail === selectedCoordenadorLote
+        const coordenadoresList = getCoordenadoresDaCoordenacao(coord)
+        const jaAtribuida = coordenadoresList.some(c => c.email === selectedCoordenadorLote)
 
         if (estaSelecionada && !jaAtribuida) {
-          // Atribuir coordenador
+          // Adicionar coordenador
           promises.push(
             fetch('/api/admin/coordenacoes', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
-                acao: 'atribuir-coordenador',
+                acao: 'adicionar-coordenador',
                 coordenacaoId: coord.id,
                 coordenadorEmail: coordenador.email,
                 coordenadorNome: coordenador.nome
@@ -382,14 +409,15 @@ export default function GerenciamentoCoordenacoes() {
             })
           )
         } else if (!estaSelecionada && jaAtribuida) {
-          // Remover coordenador
+          // Remover coordenador específico
           promises.push(
             fetch('/api/admin/coordenacoes', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
-                acao: 'remover-coordenador',
-                coordenacaoId: coord.id
+                acao: 'remover-coordenador-especifico',
+                coordenacaoId: coord.id,
+                coordenadorEmail: selectedCoordenadorLote
               })
             })
           )
@@ -557,24 +585,39 @@ export default function GerenciamentoCoordenacoes() {
                         </div>
                       </td>
                       
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        {coordenacao.coordenadorEmail ? (
-                          <div className="flex items-center">
-                            <div className="h-8 w-8 bg-blue-600 rounded-full flex items-center justify-center mr-3">
-                              <FaUser className="text-white text-xs" />
+                      <td className="px-6 py-4">
+                        {(() => {
+                          const coordenadoresList = getCoordenadoresDaCoordenacao(coordenacao)
+                          if (coordenadoresList.length === 0) {
+                            return <span className="text-sm text-gray-500 italic">Não atribuído</span>
+                          }
+                          return (
+                            <div className="space-y-2">
+                              {coordenadoresList.map((coord, idx) => (
+                                <div key={coord.email} className="flex items-center group">
+                                  <div className="h-7 w-7 bg-blue-600 rounded-full flex items-center justify-center mr-2 flex-shrink-0">
+                                    <FaUser className="text-white text-xs" />
+                                  </div>
+                                  <div className="flex-1 min-w-0">
+                                    <div className="text-sm font-medium text-gray-900 truncate">
+                                      {coord.nome}
+                                    </div>
+                                    <div className="text-xs text-gray-500 truncate">
+                                      {coord.email}
+                                    </div>
+                                  </div>
+                                  <button
+                                    onClick={() => handleRemoverCoordenador(coordenacao, coord.email)}
+                                    className="ml-2 opacity-0 group-hover:opacity-100 text-red-500 hover:text-red-700 p-1 transition-opacity"
+                                    title={`Remover ${coord.nome}`}
+                                  >
+                                    <FaTimes className="text-xs" />
+                                  </button>
+                                </div>
+                              ))}
                             </div>
-                            <div>
-                              <div className="text-sm font-medium text-gray-900">
-                                {coordenacao.coordenadorNome}
-                              </div>
-                              <div className="text-sm text-gray-500">
-                                {coordenacao.coordenadorEmail}
-                              </div>
-                            </div>
-                          </div>
-                        ) : (
-                          <span className="text-sm text-gray-500 italic">Não atribuído</span>
-                        )}
+                          )
+                        })()}
                       </td>
                       
                       <td className="px-6 py-4 whitespace-nowrap">
@@ -637,17 +680,18 @@ export default function GerenciamentoCoordenacoes() {
                             onClick={() => openAtribuirModal(coordenacao)}
                             className="inline-flex items-center px-2 py-1 border border-purple-300 text-purple-700 rounded text-xs hover:bg-purple-50 transition-colors"
                           >
-                            {coordenacao.coordenadorEmail ? <FaUserMinus className="mr-1" /> : <FaUserPlus className="mr-1" />}
-                            {coordenacao.coordenadorEmail ? 'Alterar' : 'Atribuir'}
+                            <FaUserPlus className="mr-1" />
+                            Adicionar
                           </button>
-                          
-                          {coordenacao.coordenadorEmail && (
+
+                          {getCoordenadoresDaCoordenacao(coordenacao).length > 0 && (
                             <button
                               onClick={() => handleRemoverCoordenador(coordenacao)}
                               className="inline-flex items-center px-2 py-1 border border-orange-300 text-orange-700 rounded text-xs hover:bg-orange-50 transition-colors"
+                              title="Remover todos os coordenadores"
                             >
                               <FaUserMinus className="mr-1" />
-                              Remover
+                              Limpar
                             </button>
                           )}
                           
@@ -832,7 +876,7 @@ export default function GerenciamentoCoordenacoes() {
         </div>
       )}
 
-      {/* Modal Atribuir Coordenador */}
+      {/* Modal Adicionar Coordenador */}
       {showAtribuirModal && selectedCoordenacao && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-2xl p-8 max-w-md w-full mx-4 shadow-2xl">
@@ -841,15 +885,36 @@ export default function GerenciamentoCoordenacoes() {
                 <FaUserPlus className="text-white text-2xl" />
               </div>
               <h2 className="text-2xl font-bold text-gray-900 mb-2">
-                {selectedCoordenacao.coordenadorEmail ? 'Alterar' : 'Atribuir'} Coordenador
+                Adicionar Coordenador
               </h2>
               <p className="text-gray-600">{selectedCoordenacao.nome}</p>
             </div>
 
+            {/* Coordenadores atuais */}
+            {(() => {
+              const atuais = getCoordenadoresDaCoordenacao(selectedCoordenacao)
+              if (atuais.length > 0) {
+                return (
+                  <div className="mb-4 p-3 bg-gray-50 rounded-lg">
+                    <p className="text-sm font-medium text-gray-700 mb-2">Coordenadores atuais:</p>
+                    <div className="space-y-1">
+                      {atuais.map(c => (
+                        <div key={c.email} className="text-sm text-gray-600 flex items-center">
+                          <FaUser className="mr-2 text-gray-400" />
+                          {c.nome}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )
+              }
+              return null
+            })()}
+
             <div className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Selecione o Coordenador
+                  Selecione um coordenador para adicionar
                 </label>
                 <select
                   value={selectedCoordenador}
@@ -857,12 +922,19 @@ export default function GerenciamentoCoordenacoes() {
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent text-gray-900 bg-white"
                 >
                   <option value="">Selecione um coordenador</option>
-                  {coordenadores.map((coordenador) => (
-                    <option key={coordenador.email} value={coordenador.email}>
-                      {coordenador.nome} ({coordenador.email})
-                    </option>
-                  ))}
+                  {coordenadores
+                    .filter(c => !getCoordenadoresDaCoordenacao(selectedCoordenacao).some(a => a.email === c.email))
+                    .map((coordenador) => (
+                      <option key={coordenador.email} value={coordenador.email}>
+                        {coordenador.nome} ({coordenador.email})
+                      </option>
+                    ))}
                 </select>
+                {coordenadores.filter(c => !getCoordenadoresDaCoordenacao(selectedCoordenacao).some(a => a.email === c.email)).length === 0 && (
+                  <p className="text-sm text-orange-600 mt-2">
+                    Todos os coordenadores disponíveis já foram adicionados.
+                  </p>
+                )}
               </div>
 
               <div className="flex space-x-3 pt-4">
@@ -886,12 +958,12 @@ export default function GerenciamentoCoordenacoes() {
                   {isSubmitting ? (
                     <>
                       <FaSpinner className="animate-spin" />
-                      <span>Atribuindo...</span>
+                      <span>Adicionando...</span>
                     </>
                   ) : (
                     <>
                       <FaCheck />
-                      <span>Confirmar</span>
+                      <span>Adicionar</span>
                     </>
                   )}
                 </button>
@@ -943,7 +1015,10 @@ export default function GerenciamentoCoordenacoes() {
                     ) : (
                       coordenacoes.filter(c => c.ativo).map((coord) => {
                         const isChecked = coordenacoesSelecionadas.has(coord.id)
-                        const temOutroCoordenador = coord.coordenadorEmail && coord.coordenadorEmail !== selectedCoordenadorLote
+                        const coordenadoresList = getCoordenadoresDaCoordenacao(coord)
+                        const jaTemEsteCoordenador = coordenadoresList.some(c => c.email === selectedCoordenadorLote)
+                        const outrosCoordenadores = coordenadoresList.filter(c => c.email !== selectedCoordenadorLote)
+
                         return (
                           <label
                             key={coord.id}
@@ -960,12 +1035,12 @@ export default function GerenciamentoCoordenacoes() {
                               {coord.descricao && (
                                 <div className="text-xs text-gray-500 truncate">{coord.descricao}</div>
                               )}
-                              {temOutroCoordenador && (
-                                <div className="text-xs text-orange-600 mt-1">
-                                  (Atualmente: {coord.coordenadorNome})
+                              {outrosCoordenadores.length > 0 && (
+                                <div className="text-xs text-gray-500 mt-1">
+                                  Outros: {outrosCoordenadores.map(c => c.nome).join(', ')}
                                 </div>
                               )}
-                              {coord.coordenadorEmail === selectedCoordenadorLote && (
+                              {jaTemEsteCoordenador && (
                                 <div className="text-xs text-green-600 mt-1">
                                   (Já atribuído a este coordenador)
                                 </div>

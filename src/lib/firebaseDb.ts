@@ -445,10 +445,18 @@ function formatarMinutosParaHoras(minutos: number): string {
 }
 
 // Interfaces para Coordenações
+export interface CoordenadorInfo {
+  email: string
+  nome: string
+}
+
 export interface Coordenacao {
   id: string
   nome: string
   descricao: string
+  // Novos campos para múltiplos coordenadores
+  coordenadores?: CoordenadorInfo[]
+  // Campos legados (mantidos para compatibilidade)
   coordenadorEmail?: string
   coordenadorNome?: string
   ativo: boolean
@@ -476,17 +484,27 @@ export async function getCoordenacoes(): Promise<Coordenacao[]> {
 
 export async function getCoordenacoesDoCoordenador(coordenadorEmail: string): Promise<Coordenacao[]> {
   try {
+    // Buscar coordenações ativas
     const snapshot = await adminDb
       .collection(COLLECTIONS.COORDENACOES)
-      .where('coordenadorEmail', '==', coordenadorEmail)
       .where('ativo', '==', true)
       .get()
-    
-    const coordenacoes = snapshot.docs.map(doc => ({
+
+    const todasCoordenacoes = snapshot.docs.map(doc => ({
       id: doc.id,
       ...doc.data(),
     })) as Coordenacao[]
-    
+
+    // Filtrar coordenações onde o email está no array de coordenadores OU no campo legado
+    const coordenacoes = todasCoordenacoes.filter(coord => {
+      // Verificar no novo array de coordenadores
+      if (coord.coordenadores && coord.coordenadores.length > 0) {
+        return coord.coordenadores.some(c => c.email === coordenadorEmail)
+      }
+      // Fallback para campo legado
+      return coord.coordenadorEmail === coordenadorEmail
+    })
+
     return coordenacoes.sort((a, b) => a.nome.localeCompare(b.nome))
   } catch (error) {
     console.error('Erro ao obter coordenações do coordenador:', error)
@@ -514,8 +532,9 @@ export async function criarCoordenacao(dados: {
     const coordenacaoData = {
       nome: dados.nome,
       descricao: dados.descricao,
-      coordenadorEmail: null,
-      coordenadorNome: null,
+      coordenadores: [], // Novo campo para múltiplos coordenadores
+      coordenadorEmail: null, // Mantido para compatibilidade
+      coordenadorNome: null, // Mantido para compatibilidade
       ativo: true,
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
@@ -558,28 +577,20 @@ export async function excluirCoordenacao(id: string): Promise<{ success: boolean
   }
 }
 
+// Função legada - mantida para compatibilidade, mas agora adiciona ao array
 export async function atribuirCoordenador(
   coordenacaoId: string,
   coordenadorEmail: string,
   coordenadorNome: string
 ): Promise<{ success: boolean; error?: string }> {
-  try {
-    await adminDb.collection(COLLECTIONS.COORDENACOES).doc(coordenacaoId).update({
-      coordenadorEmail,
-      coordenadorNome,
-      updatedAt: new Date()
-    })
-
-    return { success: true }
-  } catch (error) {
-    console.error('Erro ao atribuir coordenador:', error)
-    return { success: false, error: 'Erro interno do servidor' }
-  }
+  return adicionarCoordenador(coordenacaoId, coordenadorEmail, coordenadorNome)
 }
 
+// Função legada - mantida para compatibilidade, remove todos os coordenadores
 export async function removerCoordenador(coordenacaoId: string): Promise<{ success: boolean; error?: string }> {
   try {
     await adminDb.collection(COLLECTIONS.COORDENACOES).doc(coordenacaoId).update({
+      coordenadores: [],
       coordenadorEmail: null,
       coordenadorNome: null,
       updatedAt: new Date()
@@ -587,7 +598,81 @@ export async function removerCoordenador(coordenacaoId: string): Promise<{ succe
 
     return { success: true }
   } catch (error) {
-    console.error('Erro ao remover coordenador:', error)
+    console.error('Erro ao remover coordenadores:', error)
+    return { success: false, error: 'Erro interno do servidor' }
+  }
+}
+
+// Nova função para adicionar um coordenador à coordenação
+export async function adicionarCoordenador(
+  coordenacaoId: string,
+  coordenadorEmail: string,
+  coordenadorNome: string
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    const docRef = adminDb.collection(COLLECTIONS.COORDENACOES).doc(coordenacaoId)
+    const doc = await docRef.get()
+
+    if (!doc.exists) {
+      return { success: false, error: 'Coordenação não encontrada' }
+    }
+
+    const data = doc.data() as Coordenacao
+    const coordenadores = data.coordenadores || []
+
+    // Verificar se já está na lista
+    if (coordenadores.some(c => c.email === coordenadorEmail)) {
+      return { success: false, error: 'Coordenador já está atribuído a esta coordenação' }
+    }
+
+    // Adicionar novo coordenador
+    coordenadores.push({ email: coordenadorEmail, nome: coordenadorNome })
+
+    await docRef.update({
+      coordenadores,
+      // Manter campos legados atualizados com o primeiro coordenador
+      coordenadorEmail: coordenadores[0]?.email || null,
+      coordenadorNome: coordenadores[0]?.nome || null,
+      updatedAt: new Date()
+    })
+
+    return { success: true }
+  } catch (error) {
+    console.error('Erro ao adicionar coordenador:', error)
+    return { success: false, error: 'Erro interno do servidor' }
+  }
+}
+
+// Nova função para remover um coordenador específico da coordenação
+export async function removerCoordenadorEspecifico(
+  coordenacaoId: string,
+  coordenadorEmail: string
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    const docRef = adminDb.collection(COLLECTIONS.COORDENACOES).doc(coordenacaoId)
+    const doc = await docRef.get()
+
+    if (!doc.exists) {
+      return { success: false, error: 'Coordenação não encontrada' }
+    }
+
+    const data = doc.data() as Coordenacao
+    const coordenadores = data.coordenadores || []
+
+    // Filtrar para remover o coordenador específico
+    const novosCoordenadores = coordenadores.filter(c => c.email !== coordenadorEmail)
+
+    await docRef.update({
+      coordenadores: novosCoordenadores,
+      // Manter campos legados atualizados com o primeiro coordenador restante
+      coordenadorEmail: novosCoordenadores[0]?.email || null,
+      coordenadorNome: novosCoordenadores[0]?.nome || null,
+      updatedAt: new Date()
+    })
+
+    return { success: true }
+  } catch (error) {
+    console.error('Erro ao remover coordenador específico:', error)
     return { success: false, error: 'Erro interno do servidor' }
   }
 }

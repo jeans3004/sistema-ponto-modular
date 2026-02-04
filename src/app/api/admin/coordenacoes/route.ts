@@ -1,13 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
-import { 
-  getCoordenacoes, 
-  criarCoordenacao, 
-  atualizarCoordenacao, 
+import {
+  getCoordenacoes,
+  criarCoordenacao,
+  atualizarCoordenacao,
   excluirCoordenacao,
   atribuirCoordenador,
-  removerCoordenador 
+  removerCoordenador,
+  adicionarCoordenador,
+  removerCoordenadorEspecifico
 } from '@/lib/firebaseDb'
 import { obterUsuario } from '@/lib/firebaseUsers'
 
@@ -117,21 +119,22 @@ export async function POST(request: NextRequest) {
         })
 
       case 'atribuir-coordenador':
+      case 'adicionar-coordenador':
         if (!coordenacaoId || !coordenadorEmail || !coordenadorNome) {
-          return NextResponse.json({ 
-            error: 'ID da coordenação, email e nome do coordenador são obrigatórios' 
+          return NextResponse.json({
+            error: 'ID da coordenação, email e nome do coordenador são obrigatórios'
           }, { status: 400 })
         }
 
         // Verificar se o usuário é realmente um coordenador
         const coordenador = await obterUsuario(coordenadorEmail)
         if (!coordenador || !coordenador.niveisHierarquicos.includes('coordenador')) {
-          return NextResponse.json({ 
-            error: 'Usuário não é um coordenador válido' 
+          return NextResponse.json({
+            error: 'Usuário não é um coordenador válido'
           }, { status: 400 })
         }
 
-        const resultAtribuir = await atribuirCoordenador(coordenacaoId, coordenadorEmail, coordenadorNome)
+        const resultAtribuir = await adicionarCoordenador(coordenacaoId, coordenadorEmail, coordenadorNome)
 
         if (!resultAtribuir.success) {
           return NextResponse.json({ error: resultAtribuir.error }, { status: 400 })
@@ -139,10 +142,11 @@ export async function POST(request: NextRequest) {
 
         return NextResponse.json({
           success: true,
-          message: 'Coordenador atribuído com sucesso'
+          message: 'Coordenador adicionado com sucesso'
         })
 
       case 'remover-coordenador':
+        // Remove todos os coordenadores (mantido para compatibilidade)
         if (!coordenacaoId) {
           return NextResponse.json({ error: 'ID da coordenação é obrigatório' }, { status: 400 })
         }
@@ -151,6 +155,24 @@ export async function POST(request: NextRequest) {
 
         if (!resultRemover.success) {
           return NextResponse.json({ error: resultRemover.error }, { status: 400 })
+        }
+
+        return NextResponse.json({
+          success: true,
+          message: 'Todos os coordenadores removidos com sucesso'
+        })
+
+      case 'remover-coordenador-especifico':
+        if (!coordenacaoId || !coordenadorEmail) {
+          return NextResponse.json({
+            error: 'ID da coordenação e email do coordenador são obrigatórios'
+          }, { status: 400 })
+        }
+
+        const resultRemoverEsp = await removerCoordenadorEspecifico(coordenacaoId, coordenadorEmail)
+
+        if (!resultRemoverEsp.success) {
+          return NextResponse.json({ error: resultRemoverEsp.error }, { status: 400 })
         }
 
         return NextResponse.json({
