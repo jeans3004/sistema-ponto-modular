@@ -242,21 +242,21 @@ export default function Home() {
           <div className="flex flex-col md:flex-row justify-between items-center">
             <div className="text-center md:text-left mb-4 md:mb-0">
               <p className="text-blue-200">
-                © 2025 Desenvolvido por Jean Machado
+                © {new Date().getFullYear()} Sistema de Ponto CM
               </p>
               <p className="text-blue-300 text-sm">
-                Sistema de Controle de Pontos - Todos os direitos reservados
+                Desenvolvido para gestão de ponto eletrônico
               </p>
             </div>
             <div className="flex space-x-6">
-              <a href="#" className="text-blue-200 hover:text-white transition-colors">
-                Privacidade
-              </a>
-              <a href="#" className="text-blue-200 hover:text-white transition-colors">
-                Termos
-              </a>
-              <a href="#" className="text-blue-200 hover:text-white transition-colors">
-                Suporte
+              <Link href="/politica-privacidade" className="text-blue-200 hover:text-white transition-colors">
+                Política de Privacidade
+              </Link>
+              <Link href="/termos-uso" className="text-blue-200 hover:text-white transition-colors">
+                Termos de Uso
+              </Link>
+              <a href="mailto:contato@ponto-cm.com.br" className="text-blue-200 hover:text-white transition-colors">
+                Contato
               </a>
             </div>
           </div>
