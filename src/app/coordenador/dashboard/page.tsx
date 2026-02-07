@@ -660,6 +660,18 @@ export default function CoordenadorDashboard() {
               </button>
 
               <button
+                onClick={() => router.push('/coordenador/ausencias')}
+                className="w-full flex items-center p-3 bg-gradient-to-r from-yellow-50 to-yellow-100 rounded-xl hover:from-yellow-100 hover:to-yellow-200 transition-all duration-200 border border-yellow-200"
+              >
+                <FaCalendarAlt className="text-yellow-600 mr-3 text-lg" />
+                <div className="flex-1 text-left">
+                  <p className="font-semibold text-yellow-900">Ausências</p>
+                  <p className="text-sm text-yellow-700">Aprovar e reprovar ausências</p>
+                </div>
+                <FaArrowRight className="text-yellow-600" />
+              </button>
+
+              <button
                 onClick={() => router.push('/relatorios')}
                 className="w-full flex items-center p-3 bg-gradient-to-r from-blue-50 to-blue-100 rounded-xl hover:from-blue-100 hover:to-blue-200 transition-all duration-200 border border-blue-200"
               >
