@@ -258,6 +258,7 @@ export async function registrarAusenciaJustificada(
       justificativa,
       linkDocumento: linkDocumento || null,
       status: 'pendente',
+      dataEnvio: new Date().toISOString(),
       createdAt: new Date(),
       updatedAt: new Date(),
     }
@@ -272,6 +273,25 @@ export async function registrarAusenciaJustificada(
   }
 }
 
+// Helper para normalizar dataEnvio de registros antigos que só têm createdAt
+function normalizarAusencia(doc: FirebaseFirestore.DocumentSnapshot): AusenciaJustificada {
+  const data = doc.data()!
+  let dataEnvio = data.dataEnvio
+  if (!dataEnvio && data.createdAt) {
+    // createdAt pode ser Firestore Timestamp ou Date
+    if (data.createdAt.toDate) {
+      dataEnvio = data.createdAt.toDate().toISOString()
+    } else if (data.createdAt instanceof Date) {
+      dataEnvio = data.createdAt.toISOString()
+    }
+  }
+  return {
+    id: doc.id,
+    ...data,
+    dataEnvio: dataEnvio || '',
+  } as AusenciaJustificada
+}
+
 // Função para obter ausências justificadas
 export async function getAusenciasJustificadas(funcionarioEmail: string): Promise<AusenciaJustificada[]> {
   try {
@@ -279,12 +299,9 @@ export async function getAusenciasJustificadas(funcionarioEmail: string): Promis
       .collection(COLLECTIONS.AUSENCIAS)
       .where('funcionarioEmail', '==', funcionarioEmail)
       .get()
-    
-    const ausencias = snapshot.docs.map(doc => ({
-      id: doc.id,
-      ...doc.data(),
-    })) as AusenciaJustificada[]
-    
+
+    const ausencias = snapshot.docs.map(normalizarAusencia)
+
     // Ordenar por data no código (já que removemos orderBy do query)
     return ausencias.sort((a, b) => b.data.localeCompare(a.data))
   } catch (error) {
@@ -639,6 +656,71 @@ export async function adicionarCoordenador(
     return { success: true }
   } catch (error) {
     console.error('Erro ao adicionar coordenador:', error)
+    return { success: false, error: 'Erro interno do servidor' }
+  }
+}
+
+// Função para buscar ausências dos funcionários de determinadas coordenações
+export async function getAusenciasPorCoordenacao(funcionariosEmails: string[]): Promise<AusenciaJustificada[]> {
+  try {
+    if (funcionariosEmails.length === 0) return []
+
+    // Firestore 'in' query supports max 30 elements, batch if needed
+    const batches: string[][] = []
+    for (let i = 0; i < funcionariosEmails.length; i += 30) {
+      batches.push(funcionariosEmails.slice(i, i + 30))
+    }
+
+    const allAusencias: AusenciaJustificada[] = []
+
+    for (const batch of batches) {
+      const snapshot = await adminDb
+        .collection(COLLECTIONS.AUSENCIAS)
+        .where('funcionarioEmail', 'in', batch)
+        .get()
+
+      const ausencias = snapshot.docs.map(normalizarAusencia)
+      allAusencias.push(...ausencias)
+    }
+
+    // Ordenar por data mais recente
+    return allAusencias.sort((a, b) => b.data.localeCompare(a.data))
+  } catch (error) {
+    console.error('Erro ao obter ausências por coordenação:', error)
+    return []
+  }
+}
+
+// Função para atualizar status de uma ausência (aprovar/reprovar)
+export async function atualizarStatusAusencia(
+  ausenciaId: string,
+  status: 'aprovada' | 'rejeitada',
+  analisadoPor: string,
+  motivoRejeicao?: string
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    const docRef = adminDb.collection(COLLECTIONS.AUSENCIAS).doc(ausenciaId)
+    const doc = await docRef.get()
+
+    if (!doc.exists) {
+      return { success: false, error: 'Ausência não encontrada' }
+    }
+
+    const updateData: any = {
+      status,
+      dataAnalise: new Date().toISOString(),
+      analisadoPor,
+      updatedAt: new Date(),
+    }
+
+    if (motivoRejeicao) {
+      updateData.motivoRejeicao = motivoRejeicao
+    }
+
+    await docRef.update(updateData)
+    return { success: true }
+  } catch (error) {
+    console.error('Erro ao atualizar status da ausência:', error)
     return { success: false, error: 'Erro interno do servidor' }
   }
 }
