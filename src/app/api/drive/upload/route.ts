@@ -1,21 +1,73 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
-import { SYSTEM_CONFIG } from '@/lib/config'
+import { google } from 'googleapis'
+import { Readable } from 'stream'
+
+// Autenticação via Service Account (reutiliza credenciais do Firebase)
+function getDriveClient() {
+  const privateKey = process.env.FIREBASE_PRIVATE_KEY
+    ?.replace(/^"/, '')
+    .replace(/"$/, '')
+    .replace(/\\n/g, '\n')
+
+  const auth = new google.auth.GoogleAuth({
+    credentials: {
+      client_email: process.env.FIREBASE_CLIENT_EMAIL,
+      private_key: privateKey,
+    },
+    scopes: ['https://www.googleapis.com/auth/drive'],
+  })
+
+  return google.drive({ version: 'v3', auth })
+}
+
+// Buscar ou criar subpasta do funcionário dentro da pasta de ausências
+async function getOrCreateUserFolder(
+  drive: ReturnType<typeof google.drive>,
+  parentFolderId: string,
+  userEmail: string
+): Promise<string> {
+  // Buscar pasta existente
+  const query = `name='${userEmail}' and '${parentFolderId}' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false`
+  const existing = await drive.files.list({
+    q: query,
+    fields: 'files(id, name)',
+    supportsAllDrives: true,
+    includeItemsFromAllDrives: true,
+  })
+
+  if (existing.data.files && existing.data.files.length > 0) {
+    return existing.data.files[0].id!
+  }
+
+  // Criar pasta nova
+  const folder = await drive.files.create({
+    requestBody: {
+      name: userEmail,
+      mimeType: 'application/vnd.google-apps.folder',
+      parents: [parentFolderId],
+    },
+    fields: 'id',
+    supportsAllDrives: true,
+  })
+
+  return folder.data.id!
+}
 
 export async function POST(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions)
 
-    if (!session || !session.accessToken) {
+    if (!session?.user?.email) {
       return NextResponse.json(
-        { success: false, error: 'Não autenticado ou token de acesso indisponível' },
+        { success: false, error: 'Não autenticado' },
         { status: 401 }
       )
     }
 
-    const folderId = SYSTEM_CONFIG.GOOGLE_DRIVE.AUSENCIAS_FOLDER_ID
-    if (!folderId) {
+    const ausenciasFolderId = process.env.GOOGLE_DRIVE_AUSENCIAS_FOLDER_ID
+    if (!ausenciasFolderId) {
       return NextResponse.json(
         { success: false, error: 'Pasta do Google Drive não configurada' },
         { status: 500 }
@@ -41,86 +93,61 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Ler o conteúdo do arquivo
-    const fileBuffer = Buffer.from(await file.arrayBuffer())
-
-    // Montar upload multipart para Google Drive API
-    const metadata = {
-      name: file.name,
-      parents: [folderId],
-    }
-
-    const boundary = 'drive_upload_boundary'
-    const delimiter = `\r\n--${boundary}\r\n`
-    const closeDelimiter = `\r\n--${boundary}--`
-
-    const metadataPart =
-      delimiter +
-      'Content-Type: application/json; charset=UTF-8\r\n\r\n' +
-      JSON.stringify(metadata)
-
-    const mediaPart =
-      delimiter +
-      `Content-Type: ${file.type}\r\n` +
-      'Content-Transfer-Encoding: base64\r\n\r\n'
-
-    const body = Buffer.concat([
-      Buffer.from(metadataPart, 'utf-8'),
-      Buffer.from(mediaPart, 'utf-8'),
-      Buffer.from(fileBuffer.toString('base64'), 'utf-8'),
-      Buffer.from(closeDelimiter, 'utf-8'),
-    ])
-
-    // Upload para Google Drive
-    const uploadUrl = new URL('https://www.googleapis.com/upload/drive/v3/files')
-    uploadUrl.searchParams.set('uploadType', 'multipart')
-    uploadUrl.searchParams.set('supportsAllDrives', 'true')
-    uploadUrl.searchParams.set('includeItemsFromAllDrives', 'true')
-    uploadUrl.searchParams.set('fields', 'id,name,webViewLink')
-
-    const uploadResponse = await fetch(uploadUrl.toString(), {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${session.accessToken}`,
-        'Content-Type': `multipart/related; boundary=${boundary}`,
-      },
-      body,
-    })
-
-    if (!uploadResponse.ok) {
-      const errorData = await uploadResponse.json().catch(() => ({}))
-      console.error('Erro no upload ao Google Drive:', errorData)
+    // Validar tamanho (10MB)
+    if (file.size > 10 * 1024 * 1024) {
       return NextResponse.json(
-        { success: false, error: 'Falha ao enviar arquivo para o Google Drive' },
-        { status: 500 }
+        { success: false, error: 'Arquivo muito grande. Máximo 10MB.' },
+        { status: 400 }
       )
     }
 
-    const uploadResult = await uploadResponse.json()
+    const drive = getDriveClient()
 
-    // Setar permissão de leitura pública para o arquivo
-    const permissionUrl = `https://www.googleapis.com/drive/v3/files/${uploadResult.id}/permissions?supportsAllDrives=true`
-    const permResponse = await fetch(permissionUrl, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${session.accessToken}`,
-        'Content-Type': 'application/json',
+    // Buscar/criar subpasta do funcionário
+    const userFolderId = await getOrCreateUserFolder(drive, ausenciasFolderId, session.user.email)
+
+    // Preparar arquivo para upload
+    const fileBuffer = Buffer.from(await file.arrayBuffer())
+    const stream = Readable.from(fileBuffer)
+
+    // Gerar nome com data para organização
+    const now = new Date()
+    const datePrefix = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
+    const fileName = `${datePrefix}_${file.name}`
+
+    // Upload para Google Drive via Service Account
+    const uploadResult = await drive.files.create({
+      requestBody: {
+        name: fileName,
+        parents: [userFolderId],
       },
-      body: JSON.stringify({
-        role: 'reader',
-        type: 'anyone',
-      }),
+      media: {
+        mimeType: file.type,
+        body: stream,
+      },
+      fields: 'id, name, webViewLink',
+      supportsAllDrives: true,
     })
 
-    if (!permResponse.ok) {
-      console.error('Aviso: não foi possível definir permissão pública no arquivo')
+    // Definir permissão de leitura pública
+    try {
+      await drive.permissions.create({
+        fileId: uploadResult.data.id!,
+        requestBody: {
+          role: 'reader',
+          type: 'anyone',
+        },
+        supportsAllDrives: true,
+      })
+    } catch (permError) {
+      console.error('Aviso: não foi possível definir permissão pública:', permError)
     }
 
     return NextResponse.json({
       success: true,
-      fileId: uploadResult.id,
-      webViewLink: uploadResult.webViewLink || `https://drive.google.com/file/d/${uploadResult.id}/view`,
-      fileName: uploadResult.name,
+      fileId: uploadResult.data.id,
+      webViewLink: uploadResult.data.webViewLink || `https://drive.google.com/file/d/${uploadResult.data.id}/view`,
+      fileName: uploadResult.data.name,
     })
   } catch (error) {
     console.error('Erro no upload:', error)
