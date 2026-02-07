@@ -1,59 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
-import { google } from 'googleapis'
+import { getDriveClient, getDriveConfig, getOrCreateFolder } from '@/lib/googleDrive'
 import { Readable } from 'stream'
-
-// Autenticação via Service Account (reutiliza credenciais do Firebase)
-function getDriveClient() {
-  const privateKey = process.env.FIREBASE_PRIVATE_KEY
-    ?.replace(/^"/, '')
-    .replace(/"$/, '')
-    .replace(/\\n/g, '\n')
-
-  const auth = new google.auth.GoogleAuth({
-    credentials: {
-      client_email: process.env.FIREBASE_CLIENT_EMAIL,
-      private_key: privateKey,
-    },
-    scopes: ['https://www.googleapis.com/auth/drive'],
-  })
-
-  return google.drive({ version: 'v3', auth })
-}
-
-// Buscar ou criar subpasta do funcionário dentro da pasta de ausências
-async function getOrCreateUserFolder(
-  drive: ReturnType<typeof google.drive>,
-  parentFolderId: string,
-  userEmail: string
-): Promise<string> {
-  // Buscar pasta existente
-  const query = `name='${userEmail}' and '${parentFolderId}' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false`
-  const existing = await drive.files.list({
-    q: query,
-    fields: 'files(id, name)',
-    supportsAllDrives: true,
-    includeItemsFromAllDrives: true,
-  })
-
-  if (existing.data.files && existing.data.files.length > 0) {
-    return existing.data.files[0].id!
-  }
-
-  // Criar pasta nova
-  const folder = await drive.files.create({
-    requestBody: {
-      name: userEmail,
-      mimeType: 'application/vnd.google-apps.folder',
-      parents: [parentFolderId],
-    },
-    fields: 'id',
-    supportsAllDrives: true,
-  })
-
-  return folder.data.id!
-}
 
 export async function POST(request: NextRequest) {
   try {
@@ -66,10 +15,11 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const ausenciasFolderId = process.env.GOOGLE_DRIVE_AUSENCIAS_FOLDER_ID
-    if (!ausenciasFolderId) {
+    const { ausenciasFolderId, sharedDriveId } = getDriveConfig()
+
+    if (!ausenciasFolderId || !sharedDriveId) {
       return NextResponse.json(
-        { success: false, error: 'Pasta do Google Drive não configurada' },
+        { success: false, error: 'Google Drive (Shared Drive) não configurado' },
         { status: 500 }
       )
     }
@@ -101,12 +51,11 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const drive = getDriveClient()
-
-    // Buscar/criar subpasta do funcionário
-    const userFolderId = await getOrCreateUserFolder(drive, ausenciasFolderId, session.user.email)
+    // Buscar/criar subpasta do funcionário dentro de Ausencias/
+    const userFolderId = await getOrCreateFolder(ausenciasFolderId, session.user.email)
 
     // Preparar arquivo para upload
+    const drive = getDriveClient()
     const fileBuffer = Buffer.from(await file.arrayBuffer())
     const stream = Readable.from(fileBuffer)
 
@@ -115,7 +64,7 @@ export async function POST(request: NextRequest) {
     const datePrefix = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
     const fileName = `${datePrefix}_${file.name}`
 
-    // Upload para Google Drive via Service Account
+    // Upload para Shared Drive via Service Account
     const uploadResult = await drive.files.create({
       requestBody: {
         name: fileName,
@@ -128,20 +77,6 @@ export async function POST(request: NextRequest) {
       fields: 'id, name, webViewLink',
       supportsAllDrives: true,
     })
-
-    // Definir permissão de leitura pública
-    try {
-      await drive.permissions.create({
-        fileId: uploadResult.data.id!,
-        requestBody: {
-          role: 'reader',
-          type: 'anyone',
-        },
-        supportsAllDrives: true,
-      })
-    } catch (permError) {
-      console.error('Aviso: não foi possível definir permissão pública:', permError)
-    }
 
     return NextResponse.json({
       success: true,

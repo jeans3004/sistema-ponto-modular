@@ -19,6 +19,7 @@ export const SYSTEM_CONFIG = {
   // Configurações do Google Drive (Shared Drive)
   GOOGLE_DRIVE: {
     SHARED_DRIVE_ID: process.env.GOOGLE_DRIVE_SHARED_DRIVE_ID || '',
+    PARENT_FOLDER_ID: process.env.GOOGLE_DRIVE_PARENT_FOLDER_ID || '', // Pasta raiz: SistemaDePontoModular
     AUSENCIAS_FOLDER_ID: process.env.GOOGLE_DRIVE_AUSENCIAS_FOLDER_ID || '',
   },
   
