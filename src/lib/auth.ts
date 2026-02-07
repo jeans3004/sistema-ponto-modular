@@ -58,6 +58,7 @@ async function refreshAccessToken(token: JWT): Promise<JWT> {
 
 // Configuração do NextAuth.js para autenticação
 export const authOptions: NextAuthOptions = {
+  debug: true,
   providers: [
     GoogleProvider({
       clientId: process.env.GOOGLE_CLIENT_ID!,
@@ -90,45 +91,52 @@ export const authOptions: NextAuthOptions = {
   },
   callbacks: {
     async signIn({ user, account, profile }) {
-      // TODO: Adicionar lógica para verificar se o usuário existe no Firestore
-      // e se o status dele é 'ativo'. Por enquanto, permitimos todos.
+      console.log('[NextAuth] signIn callback - user:', user?.email, 'provider:', account?.provider)
       return true
     },
     async jwt({ token, user, account }) {
-      // No primeiro login, o objeto 'user' e 'account' estão disponíveis
-      if (user) {
-        token.uid = user.id
-        try {
-          token.isDatabaseAdmin = await isDatabaseAdmin(user.id)
-        } catch (error) {
-          console.error('Erro ao verificar isDatabaseAdmin no jwt callback:', error)
-          token.isDatabaseAdmin = false
+      try {
+        // No primeiro login, o objeto 'user' e 'account' estão disponíveis
+        if (user) {
+          console.log('[NextAuth] jwt callback - primeiro login, user:', user.email, 'id:', user.id)
+          token.uid = user.id
+          try {
+            token.isDatabaseAdmin = await isDatabaseAdmin(user.id)
+            console.log('[NextAuth] isDatabaseAdmin:', token.isDatabaseAdmin)
+          } catch (error) {
+            console.error('[NextAuth] Erro isDatabaseAdmin:', error)
+            token.isDatabaseAdmin = false
+          }
         }
-      }
 
-      // Capturar tokens OAuth do Google no primeiro login
-      if (account) {
-        token.accessToken = account.access_token
-        token.refreshToken = account.refresh_token
-        token.accessTokenExpires = account.expires_at
-          ? account.expires_at * 1000
-          : undefined
-      }
+        // Capturar tokens OAuth do Google no primeiro login
+        if (account) {
+          console.log('[NextAuth] jwt callback - capturando tokens OAuth, access_token existe:', !!account.access_token)
+          token.accessToken = account.access_token
+          token.refreshToken = account.refresh_token
+          token.accessTokenExpires = account.expires_at
+            ? account.expires_at * 1000
+            : undefined
+        }
 
-      // Se o token ainda não expirou, retornar como está
-      if (
-        token.accessTokenExpires &&
-        Date.now() < token.accessTokenExpires
-      ) {
+        // Se o token ainda não expirou, retornar como está
+        if (
+          token.accessTokenExpires &&
+          Date.now() < token.accessTokenExpires
+        ) {
+          return token
+        }
+
+        // Se expirou e temos refresh_token, renovar
+        if (token.refreshToken) {
+          return refreshAccessToken(token)
+        }
+
         return token
+      } catch (error) {
+        console.error('[NextAuth] ERRO FATAL no jwt callback:', error)
+        throw error
       }
-
-      // Se expirou e temos refresh_token, renovar
-      if (token.refreshToken) {
-        return refreshAccessToken(token)
-      }
-
-      return token
     },
     async session({ session, token }) {
       // Adiciona as propriedades customizadas à sessão
