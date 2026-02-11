@@ -34,7 +34,7 @@ export async function GET(req: NextRequest) {
     // Buscar coordenação do coordenador atual se não for admin
     const isAdmin = usuario.niveisHierarquicos?.includes('administrador')
     const nivelAtivo = usuario.nivelAtivo
-    let coordenacaoFiltro = null
+    let coordenacaoFiltro: string[] | null = null
     
     if (nivelAtivo === 'coordenador' || (!isAdmin && nivelAtivo !== 'administrador')) {
       // Usar a mesma função que a interface "Minhas Coordenações" usa
@@ -59,21 +59,37 @@ export async function GET(req: NextRequest) {
         })
       }
 
-      // Usar a primeira coordenação para o filtro (pode ser expandido para múltiplas)
-      coordenacaoFiltro = coordenacoesAtivas[0].id
-      console.log(`🔍 Coordenador filtrando pontos pela coordenação ativa: ${coordenacaoFiltro}`)
+      coordenacaoFiltro = coordenacoesAtivas.map(coord => coord.id)
+      console.log(`🔍 Coordenador filtrando pontos pelas coordenações ativas: [${coordenacaoFiltro.join(', ')}]`)
     }
 
     // Buscar dados dos usuários para filtrar por coordenação
-    let usuariosQuery = adminDb
-      .collection('usuarios')
-      .where('niveisHierarquicos', 'array-contains', 'colaborador')
+    let usuariosSnapshot
 
-    // Se for coordenador (não admin), filtrar apenas usuários da sua coordenação
-    if (coordenacaoFiltro) {
-      usuariosQuery = usuariosQuery.where('coordenacaoId', '==', coordenacaoFiltro)
-    } else if (!isAdmin) {
-      // Se coordenador mas sem coordenação (não deveria chegar aqui, mas por segurança)
+    if (coordenacaoFiltro && coordenacaoFiltro.length > 0) {
+      // Firestore 'in' query supports max 30 elements, batch if needed
+      const batches: string[][] = []
+      for (let i = 0; i < coordenacaoFiltro.length; i += 30) {
+        batches.push(coordenacaoFiltro.slice(i, i + 30))
+      }
+
+      const allDocs: FirebaseFirestore.QueryDocumentSnapshot[] = []
+      for (const batch of batches) {
+        const snapshot = await adminDb
+          .collection('usuarios')
+          .where('niveisHierarquicos', 'array-contains', 'colaborador')
+          .where('coordenacaoId', 'in', batch)
+          .get()
+        allDocs.push(...snapshot.docs)
+      }
+      usuariosSnapshot = { docs: allDocs }
+    } else if (isAdmin) {
+      const snapshot = await adminDb
+        .collection('usuarios')
+        .where('niveisHierarquicos', 'array-contains', 'colaborador')
+        .get()
+      usuariosSnapshot = snapshot
+    } else {
       return NextResponse.json({
         success: true,
         pontos: [],
@@ -82,8 +98,6 @@ export async function GET(req: NextRequest) {
         message: "Nenhuma coordenação encontrada"
       })
     }
-
-    const usuariosSnapshot = await usuariosQuery.get()
     
     const usuariosMap = new Map()
     const emailsPermitidos = new Set<string>()
