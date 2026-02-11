@@ -5,6 +5,7 @@ import AuthProvider from '@/components/providers/AuthProvider'
 import { ServiceWorkerProvider } from '@/components/providers/ServiceWorkerProvider'
 import { GeofencingProvider } from '@/components/providers/GeofencingProvider'
 import { InstallPWABanner } from '@/components/ui/InstallPWABanner'
+import { UpdatePWABanner } from '@/components/ui/UpdatePWABanner'
 
 const inter = Inter({ subsets: ['latin'] })
 
@@ -93,6 +94,7 @@ export default function RootLayout({
         <AuthProvider>
           <ServiceWorkerProvider>
             <GeofencingProvider>
+              <UpdatePWABanner />
               {children}
               <InstallPWABanner />
             </GeofencingProvider>

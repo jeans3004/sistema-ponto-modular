@@ -1,4 +1,4 @@
-const CACHE_NAME = 'ponto-digital-v1'
+const CACHE_NAME = 'ponto-digital-v2'
 const OFFLINE_URL = '/offline'
 
 // Recursos para cache inicial (app shell)
@@ -36,6 +36,13 @@ self.addEventListener('activate', (event) => {
     })
   )
   self.clients.claim()
+})
+
+// Escutar mensagem de skip waiting (para atualização forçada)
+self.addEventListener('message', (event) => {
+  if (event.data && event.data.type === 'SKIP_WAITING') {
+    self.skipWaiting()
+  }
 })
 
 // Estratégia: Network First com fallback para cache

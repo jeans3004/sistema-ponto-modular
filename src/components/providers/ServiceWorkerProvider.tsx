@@ -1,8 +1,32 @@
 'use client'
 
-import { useEffect } from 'react'
+import { createContext, useContext, useEffect, useState } from 'react'
+
+interface SWContextValue {
+  updateAvailable: boolean
+  applyUpdate: () => void
+}
+
+const SWContext = createContext<SWContextValue>({
+  updateAvailable: false,
+  applyUpdate: () => {},
+})
+
+export function useServiceWorker() {
+  return useContext(SWContext)
+}
 
 export function ServiceWorkerProvider({ children }: { children: React.ReactNode }) {
+  const [updateAvailable, setUpdateAvailable] = useState(false)
+  const [waitingWorker, setWaitingWorker] = useState<ServiceWorker | null>(null)
+
+  const applyUpdate = () => {
+    if (waitingWorker) {
+      waitingWorker.postMessage({ type: 'SKIP_WAITING' })
+    }
+    window.location.reload()
+  }
+
   useEffect(() => {
     if (typeof window === 'undefined') return
     if (!('serviceWorker' in navigator)) {
@@ -10,7 +34,6 @@ export function ServiceWorkerProvider({ children }: { children: React.ReactNode 
       return
     }
 
-    // Registrar Service Worker
     const registerSW = async () => {
       try {
         const registration = await navigator.serviceWorker.register('/sw.js', {
@@ -19,30 +42,46 @@ export function ServiceWorkerProvider({ children }: { children: React.ReactNode 
 
         console.log('[SW] Service Worker registered:', registration.scope)
 
-        // Verificar atualizações periodicamente
+        // Se já existe um worker waiting (atualização pendente)
+        if (registration.waiting) {
+          setWaitingWorker(registration.waiting)
+          setUpdateAvailable(true)
+        }
+
+        // Detectar nova atualização sendo instalada
         registration.addEventListener('updatefound', () => {
           const newWorker = registration.installing
           if (!newWorker) return
 
           newWorker.addEventListener('statechange', () => {
             if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
-              // Nova versão disponível
               console.log('[SW] New version available')
+              setWaitingWorker(newWorker)
+              setUpdateAvailable(true)
             }
           })
         })
 
-        // Verificar atualizações a cada hora
+        // Quando o novo SW toma controle, recarregar a página
+        let refreshing = false
+        navigator.serviceWorker.addEventListener('controllerchange', () => {
+          if (!refreshing) {
+            refreshing = true
+            window.location.reload()
+          }
+        })
+
+        // Verificar atualizações imediatamente e a cada 30 minutos
+        registration.update()
         setInterval(() => {
           registration.update()
-        }, 60 * 60 * 1000)
+        }, 30 * 60 * 1000)
 
       } catch (error) {
         console.error('[SW] Registration failed:', error)
       }
     }
 
-    // Aguardar a página carregar completamente
     if (document.readyState === 'complete') {
       registerSW()
     } else {
@@ -51,5 +90,9 @@ export function ServiceWorkerProvider({ children }: { children: React.ReactNode 
     }
   }, [])
 
-  return <>{children}</>
+  return (
+    <SWContext.Provider value={{ updateAvailable, applyUpdate }}>
+      {children}
+    </SWContext.Provider>
+  )
 }
