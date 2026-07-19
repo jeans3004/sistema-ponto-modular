@@ -29,7 +29,9 @@ export const authOptions: NextAuthOptions = {
   ],
   session: {
     strategy: 'jwt',
-    maxAge: 24 * 60 * 60, // 24 hours
+    // Sessão longa para o PWA: o colaborador abre o app e bate o ponto sem relogar.
+    // O cookie é renovado a cada uso, então só expira após 180 dias SEM abrir o app.
+    maxAge: 180 * 24 * 60 * 60, // 180 dias
   },
   cookies: {
     sessionToken: {
